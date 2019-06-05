@@ -4,14 +4,15 @@ def efficiency(energies, predictions, labels):
     '''Calculates efficiency from sparse matrices energies, predictions,
     and labels, each of size (N, 4).
     '''
-    assert energies.shape == predictions.shape and predictions.shape == label.shape
-    return np.sum(energies[np.intersect1d(predictions[:, :3], labels[:, :3])]) / np.sum(energies[labels[:, :3]])
+    assert energies.shape == predictions.shape and predictions.shape == labels.shape
+    intersection = np.unique(np.vstack((predictions[:, :3], labels[:, :3])))
+    return np.sum(energies[intersection]) / np.sum(energies[labels[:, :3]])
 
 def purity(energies, predictions, labels):
     '''Calculates purity from sparse matrices energies, predictions,
     and labels, each of size (N, 4).
     '''
-    assert energies.shape == predictions.shape and predictions.shape == label.shape
+    assert energies.shape == predictions.shape and predictions.shape == labels.shape
     return np.sum(energies[np.intersect1d(predictions[:, :3], labels[:, :3])]) / np.sum(energies[predictions[:, :3]])
 
 def accuracy(predictions, labels):
@@ -19,5 +20,5 @@ def accuracy(predictions, labels):
     predictions and labels, both of size (N, 4)
     '''
     assert predictions.shape == labels.shape
-    return np.sum(predictions[:, 3] == labels[:, 3]) / labels.shape[0]
+    return np.sum(predictions[:, 3] == labels[:, 3]) / float(labels.shape[0])
 
