@@ -19,11 +19,11 @@ charmed_baryons = [4122, 4222, 4212, 4112, 4224, 4214,
 baryons = light_baryons + strange_baryons + charmed_baryons
 
 kazu_codes = {
-    'michel': 0,
-    'delta': 1,
+    'michel': 4,
+    'delta': 3,
     'shower': 2,
-    'hip': 3,
-    'mip': 4
+    'hip': 1,
+    'mip': 0
 }
 
 def pdg_to_kazu_coding(pdg):

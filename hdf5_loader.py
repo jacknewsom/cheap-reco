@@ -1,19 +1,17 @@
 import numpy as np
 import h5py
 
-'''This file contains HDF5_to_standard_np and HDF5_to_nz_np which
+'''This file contains HDF5_to_dense_np and HDF5_to_sparse_np which
 load data from HDF5 into numpy, but in different ways.
 
-HDF5_to_standard_np loads HDF5 data into what I refer to as the
-'standard' representation for a tensor. It returns a full-size
-tensor with an entry in every place of the tensor, even if the
-entry is 0.
+HDF5_to_standard_np loads HDF5 data into the 'dense' representation
+for a tensor. It returns a full-size tensor with an entry in every
+place of the tensor, even if the entry is 0.
 
-HDF5_to_nz_np loads HDF5 data into what I refer to as the 
-'nonzero' representation for a tensor. Instead of return a full-size
-tensor, the function returns the dimensions of the tensor and
-a list of only the nonzero entries of the tensor and the corresponding
-values of those entries.
+HDF5_to_sparse_np loads HDF5 data into the sparse  representation
+for a tensor. Instead of returning a full-size tensor, the function
+returns the dimensions of the tensor and a list of only the nonzero
+entries of the tensor and the corresponding values of those entries.
 '''
 
 def HDF5_data_dimension(filename):
@@ -22,13 +20,13 @@ def HDF5_data_dimension(filename):
     with h5py.File(filename, 'r') as f:
         return f['dimension'][0]
 
-def load_and_convert_HDF5_to_standard_np(filename, start_index, batch_size):
-    '''Load HDF5 data into a numpy tensor in standard representation.
+def load_and_convert_HDF5_to_dense_np(filename, start_index, batch_size):
+    '''Load HDF5 data into a numpy tensor in dense representation.
 
     Keyword arguments:
     filename -- HDF5 file to load from
     start_index -- first instance number to load
-    batch_size -- number of instances to convert to sparse
+    batch_size -- number of instances to convert to dense
                   numpy arrays
     '''
     with h5py.File(filename, 'r') as f:
@@ -48,8 +46,8 @@ def load_and_convert_HDF5_to_standard_np(filename, start_index, batch_size):
             labels[i-start_index, x, y, z] = _labels[i]
     return data, labels
         
-def load_and_convert_HDF5_to_nz_np(filename, start_index, batch_size):
-    '''Load HDF5 data into a numpy tensor in 'nonzero' representation.
+def load_and_convert_HDF5_to_sparse_np(filename, start_index, batch_size):
+    '''Load HDF5 data into a numpy tensor in sparse representation.
 
     Keyword arguments:
     filename -- HDF5 file to load from

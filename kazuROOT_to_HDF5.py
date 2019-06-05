@@ -31,8 +31,8 @@ def get_data_dim(filename):
         print('Invalid file')
         return None
     data = neutrinos.Get('sparse3d_data_tree')
-    ev = [ev for ev in data][0]
-    x, y, z = [int(ev.GetBranch('_meta._%snum' % v).GetValue(0, 0)) for v in ['x', 'y', 'z']]
+    data.GetEvent(0)
+    x, y, z = [int(data.GetBranch('_meta._%snum' % v).GetValue(0, 0)) for v in ['x', 'y', 'z']]
     if x == y and y == z:
         return x
     print("Bad data dimension: (%d, %d, %d)" % (x, y, z))
@@ -75,27 +75,6 @@ def kazu_to_HDF5(filename, noisy=False, n_events=10000):
             voxels_z[i] = voxel[:, 2]
     print("\t100 percent complete.")
     
-def construct_sparse_matrix(indices, values, dimension):
-    '''Form a (potentially) sparse hypercubic matrix with side length 'dimension'.
-
-    Keyword arguments:
-    indices -- list of 3D coordinates of nonzero entries
-    values -- list of nonzero values
-    '''
-    sparse = np.zeros((dimension,) * 3)
-    for i, v in zip(indices, values):
-        sparse[i[0], i[1], i[2]] = v
-    return sparse
-
-def get_sparse_data_label(filename):
-    '''Return sparse versions of data and labels from Kazu-style ROOT files'''
-    d = get_data_dim(filename)
-    v, e, l = load_raw_data(filename)
-    data = construct_sparse_matrix(v, e, d)
-    label = construct_sparse_matrix(v, l, d)
-    return data, label
-
-
 if __name__ == '__main__':
     ok = False
     while not ok:
