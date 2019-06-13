@@ -2,6 +2,9 @@ import numpy as np
 import scipy as sp
 from sklearn.cluster import DBSCAN
 
+'''Utilities for clustering and grouping voxelized data.
+'''
+
 class Vertex:
     def __init__(self, number):
         self.id = number
@@ -25,6 +28,8 @@ class Color:
         return str(self.value)
 
 def dbscan(data, epsilon=3, min_samples=10):
+    '''Simple wrapper around sklearn.cluster.DBSCAN
+    '''
     return DBSCAN(eps=epsilon, min_samples=min_samples, metric='euclidean').fit(data)
 
 def closest_clusters(clusters, cutoff=10):
@@ -125,8 +130,13 @@ def color_interaction(data, epsilon=3, min_samples=10):
     '''Takes an NxM array of points. Performs DBSCAN on
     the points to form clusters. Then, connects each cluster
     to its nearest neighbor and colors all connected clusters.
-    Returns data (not in same order) plus an extra column for
+    Returns data sorted by cluster plus an extra column for
     color (i.e. an Nx(M+1) array).
+
+    Keyword arguments:
+    data -- NxM numpy array
+    epsilon -- eps parameter in DBSCAN
+    min_samples -- min_samples parameter in DBSCAN
     '''
     labels = dbscan(data, epsilon, min_samples).labels_
     signal_indices = np.where(labels!=-1)
@@ -156,6 +166,17 @@ def color_interaction(data, epsilon=3, min_samples=10):
     return [noise] + colored_signal
 
 def group_clusters(data, epsilon=2, min_samples=2):
+    '''Takes an NxM array of points. Performs DBSCAN on
+    the points to form clusters. Then, connects each cluster
+    to its nearest neighbor and colors all connected clusters.
+    Returns data in original order plus an extra column for
+    color (i.e. an Nx(M+1) array).
+
+    Keyword arguments:
+    data -- NxM numpy array
+    epsilon -- eps parameter in DBSCAN
+    min_samples -- min_samples parameter in DBSCAN
+    '''
     labels = dbscan(data, epsilon, min_samples).labels_
     # add original row index to end of row
     row_indices = np.arange(data.shape[0]).reshape((data.shape[0], 1))
@@ -202,6 +223,7 @@ def group_clusters(data, epsilon=2, min_samples=2):
 def braindead_vertex_association(clusters, vertices):
     '''Returns closest vertex to each cluster. The vertices in this
     function are 'physics' vertices, not the Vertices used above.
+    Use this function on the output of color_interaction.
     
     Keyword arguments:
     clusters -- list of numpy arrays with >= 1 row
@@ -220,7 +242,7 @@ def braindead_vertex_association(clusters, vertices):
 def simple_vertex_association(data, vertices):
     '''Returns closest vertex to each pixel. The vertices in
     this function are 'physics' vertices, not the Vertices used
-    above.
+    above. Use this function on the output of group_clusters.
 
     Keyword arguments:
     data -- (N, 4) numpy array. 3 spatial coordinates + 1 cluster coordinate

@@ -5,7 +5,7 @@ import sys
 import os
 
 '''Utilities for converting ArgonCube style data
-into 'Kazu'-style data
+into 'particlebomb'-style data
 '''
 
 
@@ -18,7 +18,7 @@ charmed_baryons = [4122, 4222, 4212, 4112, 4224, 4214,
                    4424, 4434, 4444]
 baryons = light_baryons + strange_baryons + charmed_baryons
 
-kazu_codes = {
+particlebomb_codes = {
     'michel': 4,
     'delta': 3,
     'shower': 2,
@@ -26,15 +26,15 @@ kazu_codes = {
     'mip': 0
 }
 
-def pdg_to_kazu_coding(pdg):
+def pdg_to_particlebomb_coding(pdg):
     if pdg == 11: # simplification, fix later
-        return kazu_codes['shower']
+        return particlebomb_codes['shower']
     elif -pdg == 11:
-        return kazu_codes['shower']
+        return particlebomb_codes['shower']
     elif pdg > 1e9 or abs(pdg) in baryons:
-        return kazu_codes['hip']
+        return particlebomb_codes['hip']
     elif pdg in [-13, 13, 111, 211, 321, -211, -321]:
-        return kazu_codes['mip']
+        return particlebomb_codes['mip']
     else:
         raise Exception('Unidentified PDG %d' % pdg)
 
@@ -45,7 +45,7 @@ def load_argon_tree(filename):
 def convert_event_data(event):
     x, y, z = list(event.xq), list(event.yq), list(event.zq)
     pid, energies = list(event.pidq), list(event.dq)
-    labels = [pdg_to_kazu_coding(p) for p in pid]
+    labels = [pdg_to_particlebomb_coding(p) for p in pid]
     
     return x, y, z, energies, labels
 
@@ -64,30 +64,12 @@ def raw_arcube_file_loader(argon, batch_size):
         features = np.empty((total_entries, 1))
         labels = np.empty((total_entries, 1))
         c_ind = 0
-        '''
-        i = 0
-        for ev in argon:
-            if i in list(range(start_index, start_index+batch_size)):
-                end = c_ind+num_entries_per_event[i-start_index]
-                x, y, z = list(ev.xq), list(ev.yq), list(ev.zq)
-                pid, energies = list(ev.pidq), list(ev.dq)
-                _labels = [pdg_to_kazu_coding(p) for p in pid]
-                coordinates[c_ind: end, 0] = x
-                coordinates[c_ind: end, 1] = y
-                coordinates[c_ind: end, 2] = z
-                coordinates[c_ind: end, 3] = i-start_index
-
-                features[c_ind: end] = np.array(energies).reshape((len(energies), 1))
-                labels[c_ind: end] = np.array(_labels).reshape((len(_labels), 1))
-                c_ind += len(x)
-            i += 1
-        '''
         for i in range(start_index, start_index+batch_size):
             argon.GetEntry(i)
             end = c_ind+num_entries_per_event[i-start_index]
             x, y, z = list(argon.xq), list(argon.yq), list(argon.zq)
             pid, energies = list(argon.pidq), list(argon.dq)
-            _labels = [pdg_to_kazu_coding(p) for p in pid]
+            _labels = [pdg_to_particlebomb_coding(p) for p in pid]
             coordinates[c_ind: end, 0] = x
             coordinates[c_ind: end, 1] = y
             coordinates[c_ind: end, 2] = z
@@ -127,8 +109,6 @@ def voxelized_arcube_file_loader(argon, batch_size, dimension):
     for _, c, f, l in raw_arcube_file_loader(argon, batch_size):
         voxels, features, labels = voxelize(c, f, l, dimension)
         if c.shape[0] > 0 and voxels.shape[0] == 0:
-            # entire event lies outside region
-            # (but why/how is this possible?)
             continue
         yield dimension, voxels, features, labels
 

@@ -6,9 +6,9 @@ import sys
 import os
 
 '''
-kazuROOT_to_HDF5.py
+particlebomb_ROOT_to_HDF5.py
 
-To use this file to convert Kazu-style ROOT files into HDF5, first ensure you've
+To use this file to convert 'particlebomb'-style ROOT files into HDF5, first ensure you've
 booted the appropriate Docker image, i.e.
 
     shifter --image=deeplearnphysics/larcv2:cuda90-pytorch-dev20181015-scn
@@ -17,7 +17,7 @@ Doing so gives access to LArCV2 which is necessary to unpack Kazu's code.
 
 Then, run
 
-    python kazuROOT_to_HDF5.py
+    python particlebombROOT_to_HDF5.py
 
 to get started.
 '''
