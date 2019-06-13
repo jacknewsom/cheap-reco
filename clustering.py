@@ -27,9 +27,20 @@ class Color:
 def dbscan(data, epsilon=3, min_samples=10):
     return DBSCAN(eps=epsilon, min_samples=min_samples, metric='euclidean').fit(data)
 
-def closest_clusters(clusters):
+def closest_clusters(clusters, cutoff=10):
     '''Determines which clusters should be grouped together.
+    
+    Keyword arguments:
+    clusters -- list of (N, 4) numpy arrays made of 3 spatial dimensions &
+                1 row index
+    cutoff -- if a cluster's nearest neighbor is more than this
+              distance away, ignore the neighbor.
     '''
+    # remove all non-spatial dimensions
+    clusters_ = []
+    for i in range(len(clusters)):
+        clusters_.append(clusters[i][:, :3])
+    clusters = clusters_
     closest_cluster = np.full((len(clusters)), -1)
     for i, c in enumerate(clusters):
         clusters_ = clusters[:i] + clusters[i+1:]
@@ -39,9 +50,13 @@ def closest_clusters(clusters):
             if dist < min_dist:
                 min_cluster, min_dist = j, dist
         if min_cluster >= i:
+            # account for index shift from splicing on line 3
             min_cluster += 1
+        if min_dist > cutoff:
+            # if cluster is too far away from others, don't
+            # connect to other clusters
+            min_cluster = -1
         closest_cluster[i] = min_cluster
-    assert len(clusters) == 1 or -1 not in closest_cluster
     return list(closest_cluster)
 
 def find_vertex_in_graph(vertex_id, graph):
@@ -70,6 +85,8 @@ def construct_graph(clusters):
     for v_i, v_f in enumerate(closest_cluster):
         vertex_i = find_vertex_in_graph(v_i, graph)
         vertex_i.points = clusters[v_i]
+        if v_f == -1:
+            continue
         vertex_f = find_vertex_in_graph(v_f, graph)
         vertex_f.points = clusters[v_f]
         vertex_i.add_neighbor(vertex_f)
@@ -127,21 +144,100 @@ def color_interaction(data, epsilon=3, min_samples=10):
     clusters = clusters.values()
     graph = construct_graph(clusters)
     colors = color_graph(graph)
-    colored_signal = []
+    colored_signal = {}
     for cluster in graph:
         color = cluster.color.value
-        colored_signal.append(np.hstack((cluster.points, np.full((cluster.points.shape[0], 1), color))))
-    colored_noise = np.hstack((noise, np.full((noise.shape[0], 1), -1)))
-    colored_signal = np.vstack(colored_signal)
-    return np.vstack([colored_noise, colored_signal])
+        if color not in colored_signal:
+            colored_signal[color] = []
+        colored_signal[color].append(cluster.points)
+    for color in colored_signal:
+        colored_signal[color] = np.vstack(colored_signal[color])
+    colored_signal = colored_signal.values()
+    return [noise] + colored_signal
 
-if __name__ == '__main__':
-    clusters =[np.array([[1, 2],
-       [3, 4],
-       [5, 6]]), np.array([[2, 4],
-       [5, 1],
-       [6, 2]]), np.array([[1, 1],
-       [2, 5],
-       [7, 0]])]
-    c1, c2, c3 = [clusters[i] for i in range(3)]
+def group_clusters(data, epsilon=2, min_samples=2):
+    labels = dbscan(data, epsilon, min_samples).labels_
+    # add original row index to end of row
+    row_indices = np.arange(data.shape[0]).reshape((data.shape[0], 1))
+    # 3 spatial coordinates + 1 row index
+    data = np.hstack((data, row_indices))
+    # 3 spatial coordinates + 1 cluster index
+    signal_indices = np.where(labels != -1)
+    noise_indices = np.where(labels == -1)
+    signal = data[signal_indices]
+    noise = data[noise_indices]
+    clusters = {}
+    labels = labels[signal_indices]
+    for i, label in enumerate(labels):
+        if label not in clusters.keys():
+            clusters[label] = []
+        clusters[label].append(signal[i])
+    for cluster in clusters:
+        clusters[cluster] = np.vstack(clusters[cluster])
+    clusters = clusters.values()
+    graph = construct_graph(clusters)
+    color = color_graph(graph)
+    colored_signal = {}
+    for cluster in graph:
+        color = cluster.color.value
+        if color not in colored_signal:
+            colored_signal[color] =[]
+        colored_signal[color].append(cluster.points)
+    for color in colored_signal:
+        colored_signal[color] = np.vstack(colored_signal[color])
+        color_dim = np.full((colored_signal[color].shape[0], 1), color)
+        # add cluster index as final column
+        colored_signal[color] = np.hstack((colored_signal[color], color_dim))
+    colored_signal = np.vstack(colored_signal.values())
+    # add cluster index as final column
+    colored_noise = np.hstack((noise, np.full((noise.shape[0], 1), -1)))
+    useful_indices = np.array([0, 1, 2, 4])
+    colored_data = np.empty((colored_signal.shape[0]+colored_noise.shape[0], 4))
+    for noisy_point in colored_noise:
+        colored_data[int(noisy_point[-2])] = noisy_point[useful_indices]
+    for signal_point in colored_signal:
+        colored_data[int(signal_point[-2])] = signal_point[useful_indices]
+    return colored_data
+
+def braindead_vertex_association(clusters, vertices):
+    '''Returns closest vertex to each cluster. The vertices in this
+    function are 'physics' vertices, not the Vertices used above.
     
+    Keyword arguments:
+    clusters -- list of numpy arrays with >= 1 row
+    vertices -- list of numpy arrays with 1 row
+    '''
+    closest_vertex = np.full((len(clusters)), -1)
+    for i, cluster in enumerate(clusters):
+        min_vertex, min_dist = -1, np.inf
+        for j, vertex in enumerate(vertices):
+            dist = np.amin(sp.spatial.distance.pdist(np.vstack((cluster, vertex)))[-1])
+            if dist < min_dist:
+                min_vertex, min_dist = j, dist
+        closest_vertex[i] = min_vertex
+    return closest_vertex
+
+def simple_vertex_association(data, vertices):
+    '''Returns closest vertex to each pixel. The vertices in
+    this function are 'physics' vertices, not the Vertices used
+    above.
+
+    Keyword arguments:
+    data -- (N, 4) numpy array. 3 spatial coordinates + 1 cluster coordinate
+    vertices -- list of numpy arrays with 1 row
+    '''
+    clusters = {}
+    colors = {}
+    for row in data:
+        if row[-1] not in clusters:
+            clusters[row[-1]] = []
+        clusters[row[-1]].append(row[:-1])
+    for cluster in clusters:
+        clusters[cluster] = np.vstack(clusters[cluster])
+    closest_vertices = braindead_vertex_association(clusters.values(), vertices)
+    for cluster, vertex in zip(clusters.keys(), closest_vertices):
+        colors[cluster] = vertex
+    rowwise_vertices = np.empty((data.shape[0]))
+    for i, row in enumerate(data):
+        rowwise_vertices[i] = colors[row[-1]]
+    return rowwise_vertices

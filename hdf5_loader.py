@@ -86,7 +86,26 @@ def load_and_convert_HDF5_to_sparse_np(filename, start_index, batch_size):
 
         return dim, coordinates, features, labels
 
-def linear_train_loader(filename, batch_size):
+def load_and_offset_HDF5_to_sparse_np(filename, batch_size, start_index=0):
+    '''Load HDF5 data from multiple events into sparse tensors, shift the events
+    by various offsets, then add the events togetehr
+    '''
+    c, f, l, o = [], [], [], []
+    loader = linear_train_loader(filename, 1, start_index)
+    counter = 0
+    while counter < batch_size:
+        d, c_, f_, l_, _ = next(loader)
+        o_ = np.random.random_integers(0, 40, (1, 3))
+        c_[:, :3] += o_
+        c_[:, -1] = counter
+        c.append(c_)
+        f.append(f_)
+        l.append(l_)
+        o.append(o_)
+        counter += 1
+    return d, c, f, l, o
+
+def linear_train_loader(filename, batch_size, start_from=0):
     '''Generator that yields numpy data converted from HDF5 batchwise.
     '''
     with h5py.File(filename, 'r') as f:
@@ -97,7 +116,7 @@ def linear_train_loader(filename, batch_size):
         energies = f['energies']
         _labels = f['labels']
         
-        for start_index in range(0, 10000//batch_size, batch_size):
+        for start_index in range(start_from,  10000//batch_size, batch_size):
             num_entries_per_event = [len(voxels_x[i]) for i in range(start_index, start_index+batch_size)]
             total_entries = sum(num_entries_per_event)
             coordinates = np.empty((total_entries, 4))
