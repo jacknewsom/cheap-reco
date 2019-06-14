@@ -5,6 +5,6 @@ These tools have a variety of different dependencies so the easiest way to use t
 
 ## Usage
 One typical workflow is
-    1. Load data from HDF5 (using functions in `hdf5_loader.py`)
-    2. Perform clustering (using functions in `clustering.py`)
-    3. Plot results (using functions in `drawing.py`)
+1. Load data from HDF5 (using functions in `hdf5_loader.py`)
+2. Perform clustering (using functions in `clustering.py`)
+3. Plot results (using functions in `drawing.py`)
