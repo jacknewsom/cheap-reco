@@ -72,19 +72,23 @@ if __name__ == '__main__':
     files = ["192px_00.hdf5", "ArCube_0100.hdf5"]
     for q in files:
         big = 900 if q == files[0] else 9001
-        for i in range(big):
+        for i in range(big):            
             d, c, f, l, o = load_and_offset_HDF5_to_sparse_np(q, 2, i*2)
             groups = group_clusters(np.vstack(c)[:, :3])
             predictions = simple_vertex_association(groups, o)
             energies = np.vstack(f)
             labels = np.vstack(c)[:, -1]
             e, p = energy_metrics(energies, predictions, labels)
-            for i in [0, 1]:
-                efficiencies[i].append(
-            
+            for j in [0, 1]:
+                efficiencies[j].append(e[j])
+                purities[j].append(p[j])
             if i % 10 == 0:
                 print("%s - %d" % (q, i))
-                print("\tinstance (e, p) = (%f, %f)" % (e, p))
-                eff = np.nansum(efficiencies) / np.count_nonzero(~np.isnan(efficiencies))
-                pur = np.nansum(purities) / np.count_nonzero(~np.isnan(purities))
-                print("\ttotal (e, p) = (%f, %f)" % (eff, pur))
+                c0e = np.nansum(efficiencies[0]) / np.count_nonzero(~np.isnan(efficiencies[0]))
+                c1e = np.nansum(efficiencies[1]) / np.count_nonzero(~np.isnan(efficiencies[1]))
+                c0p = np.nansum(purities[0]) / np.count_nonzero(~np.isnan(purities[0]))
+                c1p = np.nansum(purities[1]) / np.count_nonzero(~np.isnan(purities[1]))
+                ae, ap = (c0e + c1e)/2, (c0p + c1p) / 2
+                print("\tavg Class 0 (e, p) = (%f, %f)" % (c0e, c0p))
+                print("\tavg Class 1 (e, p) = (%f, %f)" % (c1e, c1p))
+                print("\tavg total (e, p) = (%f, %f)" % (ae, ap))

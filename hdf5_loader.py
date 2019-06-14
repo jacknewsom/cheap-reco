@@ -100,7 +100,7 @@ def load_and_offset_HDF5_to_sparse_np(filename, batch_size, start_index=0):
     counter = 0
     while counter < batch_size:
         d, c_, f_, l_, _ = next(loader)
-        o_ = np.random.random_integers(-86, 86, (1, 3))
+        o_ = np.random.random_integers(-20, 20, (1, 3))
         c_[:, :3] += o_
         c_[:, -1] = counter
         c.append(c_)
