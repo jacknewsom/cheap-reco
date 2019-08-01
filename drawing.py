@@ -2,7 +2,6 @@ import numpy as np
 import plotly.graph_objs as go
 from plotly.offline import plot
 from hdf5_loader import load_and_offset_HDF5_to_sparse_np
-from clustering import color_interaction, braindead_vertex_association
 
 def scatter(x, y, z, color, colorscale=None, markersize=2, name=None, hovertext=None, filename='temp.html'):
     '''Draw 3D scatterplot.

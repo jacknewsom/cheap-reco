@@ -67,18 +67,19 @@ def number_purity(predictions, labels):
 
 if __name__ == '__main__':
     from hdf5_loader import load_and_offset_HDF5_to_sparse_np
-    from clustering import group_clusters, simple_vertex_association
+    from clustering import point_vertex_association
     efficiencies, purities = {0: [], 1: []}, {0: [], 1: []}
     files = ["192px_00.hdf5", "ArCube_0100.hdf5"]
     for q in files:
         big = 900 if q == files[0] else 9001
         for i in range(big):            
             d, c, f, l, o = load_and_offset_HDF5_to_sparse_np(q, 2, i*2)
-            groups = group_clusters(np.vstack(c)[:, :3])
-            predictions = simple_vertex_association(groups, o)
+            predictions = point_vertex_association(np.vstack(c)[:, :3], o)
             energies = np.vstack(f)
             labels = np.vstack(c)[:, -1]
             e, p = energy_metrics(energies, predictions, labels)
+            for j in range(len(o)):
+                o[j] += 192/2
             for j in [0, 1]:
                 efficiencies[j].append(e[j])
                 purities[j].append(p[j])
