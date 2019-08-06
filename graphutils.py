@@ -2,6 +2,11 @@ import numpy as np
 import scipy as sp
 from sklearn.cluster import DBSCAN
 
+'''parameter for closest_clusters, clusters farther than this distance
+apart will not be grouped together
+'''
+cutoff_distance = 23
+
 class Vertex:
     def __init__(self, number):
         self.id = number
@@ -29,14 +34,12 @@ def dbscan(data, epsilon=3, min_samples=10):
     '''
     return DBSCAN(eps=epsilon, min_samples=min_samples, metric='euclidean').fit(data)
 
-def closest_clusters(clusters, cutoff=10):
+def closest_clusters(clusters):
     '''Determines which clusters should be grouped together.
     
     Keyword arguments:
     clusters -- list of (N, 4) numpy arrays made of 3 spatial dimensions &
                 1 row index
-    cutoff -- if a cluster's nearest neighbor is more than this
-              distance away, ignore the neighbor.
     '''
     # remove all non-spatial dimensions
     clusters_ = []
@@ -54,7 +57,7 @@ def closest_clusters(clusters, cutoff=10):
         if min_cluster >= i:
             # account for index shift from splicing on line 3
             min_cluster += 1
-        if min_dist > cutoff:
+        if min_dist > cutoff_distance:
             # if cluster is too far away from others, don't
             # connect to other clusters
             min_cluster = -1

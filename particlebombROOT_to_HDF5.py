@@ -45,6 +45,35 @@ def load_raw_data(filename, event=0):
     voxels, energies, labels = reader.get_image(event)
     return voxels, energies, labels
 
+def load_vertex_location(tfile, event_id):
+    # returns vertex location for event in voxel coordinates
+    sparse3d_data_tree = tfile.Get("sparse3d_data_tree")
+    monte_carlo = tfile.Get("particle_mcst_tree")
+
+    sparse3d_data_tree.GetEvent(event_id)
+    monte_carlo.GetEvent(event_id)
+
+    xscale = sparse3d_data_tree.GetBranch("_meta._xlen").GetValue(0, 0)
+    yscale = sparse3d_data_tree.GetBranch("_meta._ylen").GetValue(0, 0)
+    zscale = sparse3d_data_tree.GetBranch("_meta._zlen").GetValue(0, 0)
+    
+    bbp1x = sparse3d_data_tree.GetBranch("_meta._p1.x").GetValue(0, 0)
+    bbp1y = sparse3d_data_tree.GetBranch("_meta._p1.y").GetValue(0, 0)
+    bbp1z = sparse3d_data_tree.GetBranch("_meta._p1.z").GetValue(0, 0)
+    bbp2x = sparse3d_data_tree.GetBranch("_meta._p2.x").GetValue(0, 0)
+    bbp2y = sparse3d_data_tree.GetBranch("_meta._p2.y").GetValue(0, 0)
+    bbp2z = sparse3d_data_tree.GetBranch("_meta._p2.z").GetValue(0, 0)
+    
+    x_cm = monte_carlo.GetBranch("_part_v._vtx._x").GetValue(0, 1)
+    y_cm = monte_carlo.GetBranch("_part_v._vtx._y").GetValue(0, 1)
+    z_cm = monte_carlo.GetBranch("_part_v._vtx._z").GetValue(0, 1)
+
+    voxelizer = lambda coord, p1coord, scale: int((coord - p1coord) / scale)
+    x = voxelizer(x_cm, bbp1x, xscale)
+    y = voxelizer(y_cm, bbp1y, yscale)
+    z = voxelizer(z_cm, bbp1z, zscale)
+    return x, y, z
+    
 def kazu_to_HDF5(filename, noisy=False, n_events=10000):
     '''Store Kazu-style data in an HDF5 file
     '''
@@ -60,12 +89,17 @@ def kazu_to_HDF5(filename, noisy=False, n_events=10000):
     with h5py.File(filename+'.hdf5', 'w') as f:
         dimension = f.create_dataset('dimension', (1,), dtype=np.dtype('int32'))
         dimension[0] = dim
-                                     
+
+        # used to get vertex location
+        tfile = TFile(filename + ".root")
+        
         voxels_x = f.create_dataset('voxels_x', (n_events,), dtype=dt)
         voxels_y = f.create_dataset('voxels_y', (n_events,), dtype=dt)
         voxels_z = f.create_dataset('voxels_z', (n_events,), dtype=dt)
         energies = f.create_dataset('energies', (n_events,), dtype=dt)
         labels = f.create_dataset('labels', (n_events,), dtype=dt)
+        vertex = f.create_dataset('vertex', (n_events, 3), dtype=np.dtype('int32'))
+        
         for i in range(n_events):
             if i % 1000 == 0 and noisy:
                 print("\t%d percent complete." % (100.0 * (i+1)/n_events))
@@ -73,7 +107,9 @@ def kazu_to_HDF5(filename, noisy=False, n_events=10000):
             voxels_x[i] = voxel[:, 0]
             voxels_y[i] = voxel[:, 1]
             voxels_z[i] = voxel[:, 2]
-    print("\t100 percent complete.")
+            vertex[i] = load_vertex_location(tfile, i)
+
+        print("\t100 percent complete.")
     
 if __name__ == '__main__':
     ok = False

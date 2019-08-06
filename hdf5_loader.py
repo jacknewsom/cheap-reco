@@ -88,27 +88,30 @@ def load_and_convert_HDF5_to_sparse_np(filename, start_index, batch_size):
 
 def load_and_offset_HDF5_to_sparse_np(filename, batch_size, start_index=0):
     '''Load HDF5 data from multiple events into sparse tensors, shift the events
-    by various offsets, then add the events togetehr
+    by various offsets, then add the events together
 
     Keyword arguments:
     filename -- name of input HDF5 file
     batch_size -- number of events to load
     start_index -- location to start loading events from
     '''
-    c, f, l, o = [], [], [], []
+    c, f, l, o, v = [], [], [], [], []
     loader = linear_train_loader(filename, 1, start_index)
     counter = 0
+    
     while counter < batch_size:
-        d, c_, f_, l_, _ = next(loader)
+        d, c_, f_, l_, _, v_ = next(loader)
         o_ = np.random.random_integers(-20, 20, (1, 3))
         c_[:, :3] += o_
         c_[:, -1] = counter
+        v_ += o_
         c.append(c_)
         f.append(f_)
         l.append(l_)
         o.append(o_)
+        v.append(v_)
         counter += 1
-    return d, c, f, l, o
+    return d, c, f, l, o, v
 
 def linear_train_loader(filename, batch_size, start_from=0):
     '''Generator that yields numpy data converted from HDF5 batchwise.
@@ -126,7 +129,7 @@ def linear_train_loader(filename, batch_size, start_from=0):
         energies = f['energies']
         _labels = f['labels']
         
-        for start_index in range(start_from,  10000//batch_size, batch_size):
+        for start_index in range(start_from,  10000, batch_size):
             num_entries_per_event = [len(voxels_x[i]) for i in range(start_index, start_index+batch_size)]
             total_entries = sum(num_entries_per_event)
             coordinates = np.empty((total_entries, 4))
@@ -147,4 +150,7 @@ def linear_train_loader(filename, batch_size, start_from=0):
 
                 c_ind += len(voxels_x[i])
 
-            yield dim, coordinates, features, labels, num_entries_per_event
+            if 'vertex' in f.keys():
+                yield dim, coordinates, features, labels, num_entries_per_event, tuple(f['vertex'][start_index])
+            else:
+                yield dim, coordinates, features, labels, num_entries_per_event, (0,0,0)
