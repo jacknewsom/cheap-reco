@@ -46,47 +46,7 @@ def load_and_convert_HDF5_to_dense_np(filename, start_index, batch_size):
             labels[i-start_index, x, y, z] = _labels[i]
     return data, labels
         
-def load_and_convert_HDF5_to_sparse_np(filename, start_index, batch_size):
-    '''Load HDF5 data into a numpy tensor in sparse representation.
-
-    Keyword arguments:
-    filename -- HDF5 file to load from
-    start_index -- first instance number to load
-    batch_size -- number of instances to convert to sparse
-                  numpy arrays
-    '''
-    with h5py.File(filename, 'r') as f:
-        dim = f['dimension'][0]
-        voxels_x = f['voxels_x']
-        voxels_y = f['voxels_y']
-        voxels_z = f['voxels_z']
-
-        energies = f['energies']
-        _labels = f['labels']
-
-        num_entries_per_event = [len(voxels_x[i]) for i in range(start_index, start_index+batch_size)]
-        total_entries = sum(num_entries_per_event)
-        coordinates = np.empty((total_entries, 4))
-        features = np.empty((total_entries, 1))
-        labels = np.empty((total_entries, 1))
-
-        c_ind = 0
-
-        for i in range(start_index, start_index+batch_size):
-            end = c_ind+num_entries_per_event[i-start_index]
-            coordinates[c_ind: end, 0] = voxels_x[i]
-            coordinates[c_ind: end, 1] = voxels_y[i]
-            coordinates[c_ind: end, 2] = voxels_z[i]
-            coordinates[c_ind: end, 3] = i-start_index
-            
-            features[c_ind: end] = energies[i].reshape((energies[i].shape[0], 1))
-            labels[c_ind: end] = _labels[i].reshape((_labels[i].shape[0], 1))
-            
-            c_ind += len(voxels_x[i])
-
-        return dim, coordinates, features, labels
-
-def load_and_offset_HDF5_to_sparse_np(filename, batch_size, start_index=0):
+def load_and_convert_HDF5_to_sparse_np(filename, batch_size, start_index=0):
     '''Load HDF5 data from multiple events into sparse tensors, shift the events
     by various offsets, then add the events together
 
@@ -95,23 +55,19 @@ def load_and_offset_HDF5_to_sparse_np(filename, batch_size, start_index=0):
     batch_size -- number of events to load
     start_index -- location to start loading events from
     '''
-    c, f, l, o, v = [], [], [], [], []
+    c, f, l, v = [], [], [], []
     loader = linear_train_loader(filename, 1, start_index)
     counter = 0
     
     while counter < batch_size:
         d, c_, f_, l_, _, v_ = next(loader)
-        o_ = np.random.random_integers(-20, 20, (1, 3))
-        c_[:, :3] += o_
         c_[:, -1] = counter
-        v_ += o_
         c.append(c_)
         f.append(f_)
         l.append(l_)
-        o.append(o_)
         v.append(v_)
         counter += 1
-    return d, c, f, l, o, v
+    return d, c, f, l, v
 
 def linear_train_loader(filename, batch_size, start_from=0):
     '''Generator that yields numpy data converted from HDF5 batchwise.

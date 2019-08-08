@@ -4,12 +4,12 @@ from graphutils import dbscan, construct_graph, color_graph, braindead_vertex_as
 '''Utilities for clustering and grouping voxelized data.
 '''
 
-def group_clusters(data, epsilon=2, min_samples=2):
+def supercluster(data, epsilon=2, min_samples=2):
     '''Takes an NxM array of points. Performs DBSCAN on
     the points to form clusters. Then, connects each cluster
-    to its nearest neighbor and colors all connected clusters.
-    Returns data in original order plus an extra column for
-    color (i.e. an Nx(M+1) array).
+    to its nearest neighbor and colors all connected clusters
+    to form 'superclusters'. Returns data in original order
+    plus an extra column for color (i.e. an Nx(M+1) array).
 
     Keyword arguments:
     data -- NxM numpy array
@@ -64,6 +64,10 @@ def simple_cluster_vertex_association(data, vertices):
     this function are 'physics' vertices, not the Vertices used
     above. Use this function on the output of group_clusters.
 
+    Note that this function will label all noise points '-1'. To
+    calculate the closest vertex to each noise point independently
+    (at the cost of more computations), use 'cluster_and_noise_vertex_association'.
+
     Keyword arguments:
     data -- (N, 4) numpy array. 3 spatial coordinates + 1 cluster coordinate
     vertices -- list of numpy arrays with 1 row
@@ -71,6 +75,8 @@ def simple_cluster_vertex_association(data, vertices):
     clusters = {}
     colors = {}
     for row in data:
+        if row[-1] == -1:
+            continue
         if row[-1] not in clusters:
             clusters[row[-1]] = []
         clusters[row[-1]].append(row[:-1])
@@ -81,21 +87,77 @@ def simple_cluster_vertex_association(data, vertices):
         colors[cluster] = vertex
     rowwise_vertices = np.empty((data.shape[0]))
     for i, row in enumerate(data):
-        rowwise_vertices[i] = colors[row[-1]]
+        if row[-1] == -1:
+            rowwise_vertices[i] = -1
+        else:
+            rowwise_vertices[i] = colors[row[-1]]
     return rowwise_vertices
 
-def point_vertex_association(data, vertices, epsilon=2, min_samples=2):
-    '''Takes an (N, M) array of points and returns an N long list with
-    entries corresponding to closest vertex to each supercluster.
+def cluster_and_noise_vertex_association(data, vertices):
+    '''Returns closest vertex to each pixel, handling each noise point
+    separately. The vertices in this function are 'physics' vertices, not the
+    Vertices used above. Use this function on the output of group_clusters.
+    
+    Keyword arguments:
+    data -- (N, 4) numpy array. 3 spatial coordinates + 1 cluster coordinate
+    vertices -- list of numpy arrays with 1 row
+    '''
+    clusters = {}
+    colors = {}
+    for row in data:
+        cluster_id = row[-1]
+        if cluster_id == -1:
+            cluster_id = hash(tuple(row[:-1]))
+        if cluster_id not in clusters:
+            clusters[cluster_id] = []
+        clusters[cluster_id].append(row[:-1])
+    for cluster in clusters:
+        clusters[cluster] = np.vstack(clusters[cluster])
+    closest_vertices = braindead_vertex_association(clusters.values(), vertices)
+    for cluster, vertex in zip(clusters.keys(), closest_vertices):
+        colors[cluster] = vertex
+    rowwise_vertices = np.empty((data.shape[0]))
+    for i, row in enumerate(data):
+        cluster_id = row[-1]
+        if cluster_id == -1:
+            cluster_id = hash(tuple(row[:-1]))
+        rowwise_vertices[i] = colors[cluster_id]
+    return rowwise_vertices
 
-    Acts as a simple wrapper around group_clusters and
-    simple_cluster_vertex_association.
+def two_stage_point_vertex_association(data, vertices, separate_noise=False, epsilon=2, min_samples=2):
+    '''Takes an (N, M) array of points, clusters them with DBSCAN,
+    groups these clusters into 'superclusters', then returns an
+    N long list with entries corresponding to the vertex closest
+    to each point (calculated superclusterwise).
 
     Keyword arguments:
     data -- (N, M) numpy array
+    vertices -- list of (1, 3) numpy arrays
+    separate_noise -- bool, whether or not to calculate closest
+                      vertex to each noise point independently
     epsilon -- closeness parameter for DBSCAN
     min_samples -- minimum number of samples for DBSCAN to form a cluster
-    vertices -- list of numpy arrays with 1 row
     '''
-    colored_data = group_clusters(data, epsilon, min_samples)
+    colored_data = supercluster(data, epsilon, min_samples)
+    if separate_noise:
+        return cluster_and_noise_vertex_association(colored_data, vertices)
+    return simple_cluster_vertex_association(colored_data, vertices)
+
+def single_stage_point_vertex_association(data, vertices, separate_noise=False, epsilon=2, min_samples=2):
+    '''Takes an (N, M) array of points, clusters them with DBSCAN,
+    then returns an N long list with entries corresponding to
+    the vertex closest to each point (calculated clusterwise).
+
+    Keyword arguments:
+    data -- (N, M) numpy array
+    vertices -- list of (1, 3) numpy arrays
+    separate_noise -- bool, whether or not to calculate closest
+                      vertex to each noise point independently
+    epsilon -- closeness parameter for DBSCAN
+    min_samples -- minimum number of samples for DBSCAN to form a cluster
+    '''
+    clusters = dbscan(data, epsilon, min_samples).labels_
+    colored_data = np.hstack((data, clusters.reshape(-1, 1)))
+    if separate_noise:
+        return cluster_and_noise_vertex_association(colored_data, vertices)
     return simple_cluster_vertex_association(colored_data, vertices)

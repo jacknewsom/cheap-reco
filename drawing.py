@@ -30,7 +30,8 @@ def scatter(x, y, z, color, colorscale=None, markersize=2, name=None, hovertext=
     return plot([threed], filename=filename)
 
 def draw_events_and_vertices(events, event_colors, event_text, vertices, filename):
-    '''Draw 3D scatterplot of some number of events and their respective vertices.
+    '''Handles drawing of 3D scatterplot of some number of events and their
+    respective vertices.
 
     Keyword arguments:
     events -- (N, 3) numpy array of coordinates

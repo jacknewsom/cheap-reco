@@ -107,10 +107,11 @@ def voxelize(coordinates, features, labels, dimension=192):
     
 def voxelized_arcube_file_loader(argon, batch_size, dimension):
     for _, c, f, l in raw_arcube_file_loader(argon, batch_size):
-        voxels, features, labels = voxelize(c, f, l, dimension)
+        # voxels, features, labels = voxelize(c, f, l, dimension)
+        voxels = (c / 0.3).astype('int')
         if c.shape[0] > 0 and voxels.shape[0] == 0:
             continue
-        yield dimension, voxels, features, labels
+        yield dimension, voxels, f, l
 
 def ArCube_to_HDF5(filename, dimension, noisy=False):
     arcube = TFile(filename)
@@ -129,6 +130,7 @@ def ArCube_to_HDF5(filename, dimension, noisy=False):
         voxels_z = f.create_dataset('voxels_z', (n_events,), dtype=dt)
         energies = f.create_dataset('energies', (n_events,), dtype=dt)
         labels = f.create_dataset('labels', (n_events,), dtype=dt)
+        vertex = f.create_dataset('vertex', (n_events, 3), dtype=np.dtype('int32'))
         i = 0
         for d, v, f, l in voxelized_arcube_file_loader(argon, 1, dimension):
             if i % 100 == 0 and noisy:
@@ -138,6 +140,7 @@ def ArCube_to_HDF5(filename, dimension, noisy=False):
             voxels_z[i] = v[:, 2]
             energies[i] = f.flatten()
             labels[i] = l.flatten()
+            vertex[i] = voxels_x[i][0], voxels_y[i][0], voxels_z[i][0]
             i += 1
         print("\t100 percent complete.")
         
