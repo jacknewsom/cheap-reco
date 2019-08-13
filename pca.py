@@ -27,8 +27,8 @@ def associate_vertex(p, q, V):
     return V[vertex_idx]
 
 def pca(H, V):
-    ''' Principle Component Analysis
-    Purpose: Find Principle Component of a cluster of hit points
+    ''' Principal Component Analysis
+    Purpose: Find Principal Component of a cluster of hit points
 
     Input
     H : hit points matrix
