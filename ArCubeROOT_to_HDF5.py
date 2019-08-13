@@ -140,7 +140,7 @@ def ArCube_to_HDF5(filename, dimension, noisy=False):
             voxels_z[i] = v[:, 2]
             energies[i] = f.flatten()
             labels[i] = l.flatten()
-            vertex[i] = voxels_x[i][0], voxels_y[i][0], voxels_z[i][0]
+            vertex[i] = (0, 0, 0)
             i += 1
         print("\t100 percent complete.")
         

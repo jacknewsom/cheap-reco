@@ -64,3 +64,14 @@ def number_efficiency(predictions, labels):
 
 def number_purity(predictions, labels):
     pass
+
+def association_accuracy(predictions, labels):
+    '''Calculates vertex association accuracy given predictions and labels.
+
+    Keyword arguments:
+    predictions -- (N,) numpy array of predictions
+    labels -- (N,) numpy array of labels
+    '''
+    if len(predictions) != len(labels):
+        raise ValueError('length of predictions ({0}) not equal to length of labels ({1])'.format(len(predictions), len(labels))
+    return np.sum(predictions == labels) / len(predictions)
