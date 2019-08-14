@@ -29,7 +29,7 @@ def simulate_interaction(event_file):
     # load n_events
     start_index = np.random.randint(0, 999-n_events)
     d, c, f, l, v = load_and_convert_HDF5_to_sparse_np(event_file, n_events, start_index)
-
+    
     # distribute events across larger volume with
     # a uniform random distribution
     x_positions = np.random.randint(0, 1333, n_events)
@@ -60,4 +60,5 @@ def simulate_interaction(event_file):
         legal_vertices.append(vertex)
         legal_features.append(new_feature)
         legal_labels.append(new_label)
+    
     return legal_coordinates, legal_features, legal_labels, legal_vertices

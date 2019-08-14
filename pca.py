@@ -37,13 +37,12 @@ def closest_vertex(p, q, V):
     vertex_idx = distances.index(min_distance)    
     return V[vertex_idx]
 
-def pca(H, V):
+def pca(H):
     ''' Principal Component Analysis
     Purpose: Find Principal Component of a cluster of hit points
 
     --- Parameters ---
     H : Hit points cluster [Nx3]
-    V : List of all vertices 
 
     --- Output ---
     Points p and q lying on principal component (each 1x3) '''

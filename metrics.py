@@ -59,13 +59,26 @@ def energy_purity(energy, predictions, labels):
         purities[label].append(correct_energy / predicted_energy)
     return purities
 
+def energy_accuracy(energy, predictions, labels):
+    '''Calculates energywise clustering accuracy given predictions and labels.
+
+    Keyword arguments:
+    energies -- (N,) numpy array of energies
+    predictions -- (N,) numpy array of predictions
+    labels -- (N,) numpy array of labels. Note that this function
+              assumes that the prediction and label for a given voxel
+              lie at the same position in these arrays.
+    '''
+    correct = np.where(predictions == labels)
+    return sum(energy[correct]) / len(correct)
+
 def number_efficiency(predictions, labels):
     pass
 
 def number_purity(predictions, labels):
     pass
 
-def association_accuracy(predictions, labels):
+def number_accuracy(predictions, labels):
     '''Calculates vertex association accuracy given predictions and labels.
 
     Keyword arguments:
@@ -73,5 +86,5 @@ def association_accuracy(predictions, labels):
     labels -- (N,) numpy array of labels
     '''
     if len(predictions) != len(labels):
-        raise ValueError('length of predictions ({0}) not equal to length of labels ({1])'.format(len(predictions), len(labels))
+        raise ValueError('length of predictions ({0}) not equal to length of labels ({1])'.format(len(predictions), len(labels)))
     return np.sum(predictions == labels) / len(predictions)

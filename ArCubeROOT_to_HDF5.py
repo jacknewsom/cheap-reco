@@ -46,7 +46,6 @@ def convert_event_data(event):
     x, y, z = list(event.xq), list(event.yq), list(event.zq)
     pid, energies = list(event.pidq), list(event.dq)
     labels = [pdg_to_particlebomb_coding(p) for p in pid]
-    
     return x, y, z, energies, labels
 
 def get_entries_per_event(argon, start, end):
@@ -77,7 +76,6 @@ def raw_arcube_file_loader(argon, batch_size):
             features[c_ind: end] = np.array(energies).reshape((len(energies), 1))
             labels[c_ind: end] = np.array(_labels).reshape((len(_labels), 1))
             c_ind += len(x)
-
         yield -1, coordinates, features, labels
 
 def inside_region(voxel, dimension):
@@ -89,29 +87,35 @@ def inside_region(voxel, dimension):
             return False
     return True
 
-def voxelize(coordinates, features, labels, dimension=192):
+def voxelize(coordinates, features, labels):
     '''Convert discrete data from ArCube into voxelized data
     with resolution 0.3cm (so that a voxel 0.3cm on side)
+    
+    All energies in a given voxel will be added together.
+
+    The label for a given voxel is ill-defined, since
+    many particles with different labels may pass
+    through a given voxel. For now, voxels are simply
+    given at random the label of one of the particles 
+    passing through their volume.
     '''
-    uncentered_voxels = (coordinates / 0.3).astype('int')
-    rows_in_region, features_in_region, labels_in_region = [], [], []
-    for row in range(uncentered_voxels.shape[0]):
-        if inside_region(uncentered_voxels[row], dimension):
-            rows_in_region.append(uncentered_voxels[row])
-            features_in_region.append(features[row])
-            labels_in_region.append(labels[row])
-    legal_voxels = np.array(rows_in_region)
-    legal_features = np.array(features_in_region)
-    legal_labels = np.array(labels_in_region)
-    return legal_voxels + np.full(legal_voxels.shape, (dimension-1)/2), legal_features, legal_labels
+    voxels = (coordinates / 0.3).astype('int')
+    unique_voxels = {}
+    for i in range(voxels.shape[0]):
+        index = tuple(voxels[i])
+        if index not in unique_voxels:
+                 unique_voxels[index] = {"feature": 0, "label": 0} 
+        unique_voxels[index]["feature"] += features[i]
+        unique_voxels[index]["label"] = labels[i]
+    unique_coordinates = np.vstack(unique_voxels.keys())
+    unique_features = np.vstack([unique_voxels[i]["feature"] for i in unique_voxels])
+    unique_labels = np.vstack([unique_voxels[i]["label"] for i in unique_voxels])
+    return unique_coordinates, unique_features, unique_labels
     
 def voxelized_arcube_file_loader(argon, batch_size, dimension):
     for _, c, f, l in raw_arcube_file_loader(argon, batch_size):
-        # voxels, features, labels = voxelize(c, f, l, dimension)
-        voxels = (c / 0.3).astype('int')
-        if c.shape[0] > 0 and voxels.shape[0] == 0:
-            continue
-        yield dimension, voxels, f, l
+        voxels, features, labels = voxelize(c, f, l)
+        yield dimension, voxels, features, labels
 
 def ArCube_to_HDF5(filename, dimension, noisy=False):
     arcube = TFile(filename)
