@@ -1,12 +1,13 @@
 import numpy as np
 import scipy as sp
 import scipy.spatial
-from event_generator import simulate_interaction
-from clustering import cluster_and_cut
-from association import is_cluster_touching_vertex
-from pca import pca_vertex_association
-from drawing import draw_events_and_vertices as draw
-from metrics import energy_accuracy, number_accuracy
+import reconstruction.pca
+from data.event_generator import simulate_interaction
+from reconstruction.clustering import cluster_and_cut
+from reconstruction.association import is_cluster_touching_vertex
+from reconstruction.pca import pca_vertex_association
+from utils.drawing import scatter_hits, scatter_vertices, draw
+from utils.metrics import energy_accuracy, number_accuracy
 
 e_accuracies = []
 n_accuracies = []
@@ -15,7 +16,7 @@ for i in range(50):
     # load data
     coordinates = []
     while len(coordinates) == 0:
-        coordinates, features, _, vertices = simulate_interaction("data/ArCube_0000.hdf5")
+        coordinates, features, _, vertices = simulate_interaction("data_files/ArCube_0000.hdf5")
     labels = [c[:, -1].reshape((-1, 1)) for c in coordinates]
     
     # cluster and cut data
@@ -43,14 +44,22 @@ for i in range(50):
     print("\tTouching cluster association complete")
     
     # run PCA on clusters that do not touch vertices directly
+    unassociated_clusters = {}
+    _clusters_not_touching_vertices = {}
     for cluster in clusters_not_touching_vertices:
-        closest_vertex = pca_vertex_association(clusters_not_touching_vertices[cluster]["data"], vertices)
+        closest_vertex, distance = pca_vertex_association(clusters_not_touching_vertices[cluster]["data"], vertices)
+        # ignore clusters more than minimum distance away from nearest vertex
+        if distance >= reconstruction.pca.cutoff_distance:
+            unassociated_clusters[cluster] = {"data": clusters_not_touching_vertices[cluster]["data"]}
+            continue
+        
         for j in range(len(vertices)):
             if np.all(closest_vertex == vertices[j]):
-                clusters_not_touching_vertices[cluster]["vertex"] = j
-        if "vertex" not in clusters_not_touching_vertices[cluster]:
+                _clusters_not_touching_vertices[cluster] = {"data": clusters_not_touching_vertices[cluster]["data"], "vertex": j}
+        if "vertex" not in _clusters_not_touching_vertices[cluster]:
             # something's wrong
             raise RuntimeError("PCA returned vertex not in `vertices`")
+    clusters_not_touching_vertices = _clusters_not_touching_vertices
     print("\tPCA cluster association complete")
 
     # associate small clusters with same vertex as nearest big cluster
@@ -60,7 +69,7 @@ for i in range(50):
         cluster_data = small_coordinates[np.where(small_predictions == small_cluster)[0]]
         mean = np.mean(cluster_data, axis=0).reshape((1, -1))
         closest_vertex, closest_distance = None, np.inf
-        if clusters_touching_vertices is None and clusters_not_touching_vertices is None:
+        if clusters_touching_vertices == {} and clusters_not_touching_vertices == {}:
             dist_matrix = sp.spatial.distance_matrix(mean, np.vstack(vertices))
             closest_vertex = np.argmin(dist_matrix)
         else:
@@ -90,17 +99,26 @@ for i in range(50):
 
     clusters_touching_vertices = [clusters_touching_vertices[c]['data'] for c in clusters_touching_vertices]
     clusters_not_touching_vertices = [clusters_not_touching_vertices[c]['data'] for c in clusters_not_touching_vertices]
+    unassociated_clusters = [unassociated_clusters[c]['data'] for c in unassociated_clusters]
     if len(clusters_touching_vertices) == 0 and len(clusters_not_touching_vertices) != 0:
-        all_clusters = np.vstack(clusters_not_touching_vertices)
+        all_assoc_clusters = np.vstack(clusters_not_touching_vertices)
     elif len(clusters_touching_vertices) != 0 and len(clusters_not_touching_vertices) == 0:
-        all_clusters = np.vstack(clusters_touching_vertices)
+        all_assoc_clusters = np.vstack(clusters_touching_vertices)
     elif len(clusters_touching_vertices) == 0 and len(clusters_not_touching_vertices) == 0:
         # no clusters remaining after cut
         continue
     else:
-        all_clusters = np.vstack([np.vstack(clusters_touching_vertices), np.vstack(clusters_not_touching_vertices)])
+        all_assoc_clusters = np.vstack([np.vstack(clusters_touching_vertices), np.vstack(clusters_not_touching_vertices)])
 
     # calculate accuracy
+    if len(unassociated_clusters) > 0:
+        unassociated_clusters = np.vstack(unassociated_clusters)
+        unassoc_label = np.full((unassociated_clusters.shape[0], 1), -1)
+        unassoc_with_label = np.hstack((unassociated_clusters, unassoc_label))
+        all_clusters = np.vstack((all_assoc_clusters, unassoc_with_label))
+    else:
+        all_clusters = all_assoc_clusters
+        
     data_dict = {}
     coords = np.vstack((small_coordinates, coordinates))
     feats = np.hstack((small_features, features))
@@ -116,7 +134,6 @@ for i in range(50):
         # prediction
         data_dict[tuple(all_clusters[j][:-1])]["prediction"] = all_clusters[j][-1]
 
-
     correct_energies = [data_dict[k]["energy"] for k in data_dict if data_dict[k]["prediction"] == data_dict[k]["label"]]
     e_accuracy = sum(correct_energies) / sum(feats)
     as_list = [data_dict[k]["prediction"] == data_dict[k]["label"] for k in data_dict]
@@ -131,11 +148,34 @@ for i in range(50):
         new_point = np.hstack((vertices[j], j))
         coords = np.vstack((coords, vertices[j]))
         labels = np.hstack((labels, j))
-        all_clusters = np.vstack((all_clusters, new_point))
+        all_assoc_clusters = np.vstack((all_assoc_clusters, new_point))
         
     # draw graph!
-    draw(coords, labs, labs, vertices, "drawings/%d-true.html" % i)
-    draw(all_clusters[:, :3], all_clusters[:, -1], all_clusters[:, -1], vertices, "drawings/%d-pred-%.3f.html" % (i, e_accuracy))
+    true_clusters_scatterplot = scatter_hits(coords[:, 0],
+                                             coords[:, 1],
+                                             coords[:, 2],
+                                             labs)
+    associated_clusters_scatterplot = scatter_hits(all_assoc_clusters[:, 0],
+                                                   all_assoc_clusters[:, 1],
+                                                   all_assoc_clusters[:, 2],
+                                                   all_assoc_clusters[:, 3])
+    vertex_scatterplot = scatter_vertices(vertices)
+    draw("drawings/%d-true.html" % i, true_clusters_scatterplot, vertex_scatterplot)    
+    if len(unassociated_clusters) > 0:
+        unassociated_clusters_scatterplot = scatter_hits(unassociated_clusters[:, 0],
+                                                         unassociated_clusters[:, 1],
+                                                         unassociated_clusters[:, 2],
+                                                         [-1 for k in range(len(unassociated_clusters))])
+        draw("drawings/%d-pred-%.3f.html" % (i, e_accuracy),
+             associated_clusters_scatterplot,
+             unassociated_clusters_scatterplot,
+             vertex_scatterplot
+        )
+    else:
+        draw("drawings/%d-pred-%.3f.html" % (i, e_accuracy),
+             associated_clusters_scatterplot,
+             vertex_scatterplot
+        )
     print("\tGraphs saved")
 
 n_accuracy = float(sum(n_accuracies)) / len(n_accuracies)

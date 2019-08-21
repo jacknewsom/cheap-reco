@@ -2,6 +2,8 @@ from sklearn.decomposition import PCA
 import numpy as np
 import math
 
+cutoff_distance = 120
+
 def t(p, q, r):
     ''' Helper function for closest_vertex
     Purpose: Calculate t param (describes closest point on a line to vertex r)
@@ -35,7 +37,7 @@ def closest_vertex(p, q, V):
     distances = [dist(p, q, r) for r in V]
     min_distance = min(distances)
     vertex_idx = distances.index(min_distance)    
-    return V[vertex_idx]
+    return V[vertex_idx], min_distance
 
 def pca(H):
     ''' Principal Component Analysis
