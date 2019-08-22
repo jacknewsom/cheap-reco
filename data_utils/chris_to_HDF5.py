@@ -6,7 +6,7 @@ def chris_to_HDF5(filename):
     print("converting %s..." % filename)
     rootfile = TFile(filename)
     tree = rootfile.Get('tree')
-    n_events = 50000 # number of events in each 'chris'-style ROOT file
+    n_events = 10000 # number of events in each 'chris'-style ROOT file
 
     # create custom data type for ragged array
     dt = h5py.special_dtype(vlen=np.dtype('float32'))
@@ -39,7 +39,7 @@ def chris_to_HDF5(filename):
             kinetic_energies[i] = ev_kinetic_energies
 
             if (100.0 * (i + 1) / n_events) % 10 == 0:
-                print("\t %d% complete" % (100.0 * (i + 1) / n_events))
+                print("\t {}% complete".format(100.0 * (i + 1) / n_events))
 
 if __name__ == '__main__':
     chris_to_HDF5('jack.root')

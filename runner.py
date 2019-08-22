@@ -7,17 +7,22 @@ from reconstruction.clustering import cluster_and_cut
 from reconstruction.association import is_cluster_touching_vertex
 from reconstruction.pca import pca_vertex_association
 from utils.drawing import scatter_hits, scatter_vertices, draw
-from utils.metrics import energy_accuracy, number_accuracy
+from utils.metrics import energy_accuracy, number_accuracy, energy_metrics
+from time import time
 
 e_accuracies = []
 n_accuracies = []
+e_efficiencies = []
+e_purities = []
 for i in range(50):
     print("Analyzing event %d..." % i)
     # load data
+    data_load_start = time()
     coordinates = []
     while len(coordinates) == 0:
-        coordinates, features, _, vertices = simulate_interaction("data_files/ArCube_0000.hdf5")
-    labels = [c[:, -1].reshape((-1, 1)) for c in coordinates]
+        coordinates, features, vertices, pdg_codes, kinetic_energies = simulate_interaction("jack.hdf5", 1)
+    labels = [np.full((coordinates[j].shape[0], 1), j) for j in range(len(coordinates))]
+    features = [f.reshape((-1, 1)) for f in features]
     
     # cluster and cut data
     coordinates, labels, features, predictions = cluster_and_cut(np.vstack(coordinates)[:, :3], np.vstack(labels), np.vstack(features), 25)
@@ -25,9 +30,10 @@ for i in range(50):
     small_coordinates, small_labels = coordinates[1], labels[1]
     small_features, small_predictions = features[1], predictions[1]
     coordinates, labels, features, predictions = coordinates[0], labels[0], features[0], predictions[0]
+    print("\tData loaded in %.3f[s]" % (time() -  data_load_start))
 
-    print("\tData loaded")
     # split remaining data into two categories: vertex-touching and not
+    touching_cluster_start = time()
     cluster_labels = np.unique(predictions)
     clusters_touching_vertices = {}
     clusters_not_touching_vertices = {}
@@ -41,9 +47,10 @@ for i in range(50):
                 break
         if not found_touching_vertex:
             clusters_not_touching_vertices[cluster] = {"data": cluster_data}
-    print("\tTouching cluster association complete")
+    print("\tTouching cluster association complete in %.3f[s]" % (time() - touching_cluster_start))
     
     # run PCA on clusters that do not touch vertices directly
+    pca_start = time()
     unassociated_clusters = {}
     _clusters_not_touching_vertices = {}
     for cluster in clusters_not_touching_vertices:
@@ -60,9 +67,10 @@ for i in range(50):
             # something's wrong
             raise RuntimeError("PCA returned vertex not in `vertices`")
     clusters_not_touching_vertices = _clusters_not_touching_vertices
-    print("\tPCA cluster association complete")
+    print("\tPCA cluster association complete in %.3f[s]" % (time() - pca_start))
 
     # associate small clusters with same vertex as nearest big cluster
+    small_cluster_start = time()
     small_clusters = {}
     cluster_labels = np.unique(small_predictions)
     for small_cluster in cluster_labels:
@@ -83,7 +91,7 @@ for i in range(50):
         small_clusters[small_cluster] = {}
         small_clusters[small_cluster]['data'] = cluster_data
         small_clusters[small_cluster]['vertex'] = closest_vertex
-    print("\tSmall cluster nearest-neighbor association complete")
+    print("\tSmall cluster nearest-neighbor association complete in %.3f[s]" % (time() - small_cluster_start))
         
     # restructure data for graphing ease
     for group in [clusters_touching_vertices, clusters_not_touching_vertices, small_clusters]:
@@ -138,12 +146,24 @@ for i in range(50):
     e_accuracy = sum(correct_energies) / sum(feats)
     as_list = [data_dict[k]["prediction"] == data_dict[k]["label"] for k in data_dict]
     n_accuracy = float(sum(as_list)) / len(as_list)
-    print("\tEnergy Accuracy calculated: %.3f" % e_accuracy)
-    print("\tNumber Accuracy calculated: %.3f" % n_accuracy)
     n_accuracies.append(n_accuracy)
     e_accuracies.append(e_accuracy)
+    print("\tEnergy Accuracy calculated: %.3f" % e_accuracy)
+    print("\tNumber Accuracy calculated: %.3f" % n_accuracy)
+    
+    _energies = np.array([data_dict[k]["energy"] for k in data_dict])
+    _predictions = np.array([data_dict[k]["prediction"] for k in data_dict])
+    _labels = np.array([data_dict[k]["label"] for k in data_dict])
+    efficiency, purity = energy_metrics(_energies, _predictions, _labels)
+    efficiency = np.nansum(efficiency.values()) / np.sum(~np.isnan(efficiency.values()))
+    purity = np.nansum(purity.values()) / np.sum(~np.isnan(purity.values()))
+    e_efficiencies.append(efficiency)
+    e_purities.append(purity)
+    print("\tEnergy Clustering Efficiency calculated: %.3f" % efficiency)
+    print("\tEnergy Clustering Purity calculated: %.3f" % purity)
 
     # fix color bug by adding a point under each vertex at the vertex's location
+    drawing_start = time()
     for j in range(len(vertices)):
         new_point = np.hstack((vertices[j], j))
         coords = np.vstack((coords, vertices[j]))
@@ -169,16 +189,19 @@ for i in range(50):
         draw("drawings/%d-pred-%.3f.html" % (i, e_accuracy),
              associated_clusters_scatterplot,
              unassociated_clusters_scatterplot,
-             vertex_scatterplot
-        )
+             vertex_scatterplot)
     else:
         draw("drawings/%d-pred-%.3f.html" % (i, e_accuracy),
              associated_clusters_scatterplot,
-             vertex_scatterplot
-        )
-    print("\tGraphs saved")
+             vertex_scatterplot)
+    print("\tGraphs saved in %.3f[s]" % (time() - drawing_start))
+    print("\tTotal time elapsed: %.3f[s]" % (time() - data_load_start))
 
 n_accuracy = float(sum(n_accuracies)) / len(n_accuracies)
 e_accuracy = float(sum(e_accuracies)) / len(e_accuracies)
+e_efficiency = float(sum(e_efficiencies)) / len(e_efficiencies)
+e_purity = float(sum(e_purities)) / len(e_purities)
 print("\n\nTotal Energy Accuracy: %.3f" % e_accuracy)
 print("Total Number Accuracy: %.3f" % n_accuracy)
+print("Total Energy Efficiency: %.3f" % e_efficiency)
+print("Total Energy Purity: %.3f" % e_purity)

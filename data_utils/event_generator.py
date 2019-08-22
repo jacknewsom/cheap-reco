@@ -1,7 +1,49 @@
 import numpy as np
-from hdf5_loader import load_and_convert_HDF5_to_sparse_np
+from hdf5_loader import load_and_convert_HDF5_to_sparse_np, load_HDF5_from_dataset_keys
 
-def simulate_interaction(event_file):
+def simulate_interaction(event_file, beam_intensity):
+    '''Simulates neutrino interaction events in large
+    volume of liquid argon.
+
+    Event vertices are assumed to be distributed over
+    a 7m x 3m x 5m volume. Then, two cuts are performed.
+    First, events with vertices outside the fiducial volume
+    are removed. Then, events without muons with kinetic energy
+    above 500 MeV as primaries are removed.
+
+    Keyword Arguments:
+    event_file -- string, HDF5 file to load events from
+    beam_intensity -- float, beam intensity in megawatts
+    '''
+    def vertex_in_fiducial_volume(vertex):
+        x = abs(vertex[0]) < 300
+        y = abs(vertex[1]) < 100
+        z = 50 < vertex[2] and vertex[2] < 350
+        return x and y and z
+
+    def contains_energetic_muon(pdg_codes, kinetic_energies):
+        return True in (kinetic_energies[pdg_codes == 13] > 500)
+    
+    # approximately 124 events per spill per megawatt at 574m
+    poisson_mean = 124 * beam_intensity
+    n_events = np.random.poisson(poisson_mean)
+    
+    # load n_events
+    start_index = np.random.randint(0, 9999-n_events)
+    keys = ['coordinates', 'energies', 'vertex', 'pdg_codes', 'kinetic_energies']
+    c, e, v, pdg, ke = load_HDF5_from_dataset_keys(event_file, keys, n_events, start_index)
+    coordinates, energies, vertices, pdg_codes, kinetic_energies = [], [], [], [], []
+    for xyz, energy, vertex, pdg_code, kinetic_energy in zip(c, e, v, pdg, ke):
+        if not (vertex_in_fiducial_volume(vertex) and contains_energetic_muon(pdg_code, kinetic_energy)):
+            continue
+        coordinates.append(xyz)
+        energies.append(energy)
+        vertices.append(vertex)
+        pdg_codes.append(pdg_code)
+        kinetic_energies.append(kinetic_energy)
+    return coordinates, energies, vertices, pdg_codes, kinetic_energies
+        
+def simulate_interaction_without_pileup(event_file):
     '''Simulates neutrino interaction events in a large
     volume of Argon, then returns contents of a smaller
     volume.
