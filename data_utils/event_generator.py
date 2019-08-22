@@ -32,16 +32,28 @@ def simulate_interaction(event_file, beam_intensity):
     start_index = np.random.randint(0, 9999-n_events)
     keys = ['coordinates', 'energies', 'vertex', 'pdg_codes', 'kinetic_energies']
     c, e, v, pdg, ke = load_HDF5_from_dataset_keys(event_file, keys, n_events, start_index)
-    coordinates, energies, vertices, pdg_codes, kinetic_energies = [], [], [], [], []
-    for xyz, energy, vertex, pdg_code, kinetic_energy in zip(c, e, v, pdg, ke):
-        if not (vertex_in_fiducial_volume(vertex) and contains_energetic_muon(pdg_code, kinetic_energy)):
+    events = []
+    for i in range(n_events):
+        # reject events with no hits in detector volume
+        if len(c[i]) == 0:
             continue
-        coordinates.append(xyz)
-        energies.append(energy)
-        vertices.append(vertex)
-        pdg_codes.append(pdg_code)
-        kinetic_energies.append(kinetic_energy)
-    return coordinates, energies, vertices, pdg_codes, kinetic_energies
+        # reject event if no energetic muon
+        if not contains_energetic_muon(pdg[i], ke[i]):
+            continue
+        events.append({})
+        
+        events[-1]['coordinates'] = c[i]
+        events[-1]['energies'] = e[i]
+
+        # reject vertex if outside fiducial volume
+        if not vertex_in_fiducial_volume(v[i]):
+            events[-1]['vertex'] = None
+        else:
+            events[-1]['vertex'] = v[i]
+
+        events[-1]['pdg_codes'] = pdg[i]
+        events[-1]['kinetic_energies'] = ke[i]
+    return events
         
 def simulate_interaction_without_pileup(event_file):
     '''Simulates neutrino interaction events in a large

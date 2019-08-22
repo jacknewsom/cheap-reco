@@ -18,10 +18,16 @@ for i in range(50):
     print("Analyzing event %d..." % i)
     # load data
     data_load_start = time()
-    coordinates = []
-    while len(coordinates) == 0:
-        coordinates, features, vertices, pdg_codes, kinetic_energies = simulate_interaction("jack.hdf5", 1)
-    labels = [np.full((coordinates[j].shape[0], 1), j) for j in range(len(coordinates))]
+    events = []
+    while len(events) == 0:
+        events = simulate_interaction("jack.hdf5", 1)
+    coordinates = [events[j]['coordinates'] for j in range(len(events))]
+    features = [events[j]['energies'] for j in range(len(events))]
+    vertices = [events[j]['vertex'] for j in range(len(events))]
+    pdg_codes = [events[j]['pdg_codes'] for j in range(len(events))]
+    kinetic_energies = [events[j]['kinetic_energies'] for j in range(len(events))]
+    
+    labels = [np.full((coordinates[j].shape[0], 1), j) if vertices[j] is not None else np.full((coordinates[j].shape[0], 1), -1) for j in range(len(coordinates))]
     features = [f.reshape((-1, 1)) for f in features]
     
     # cluster and cut data
@@ -41,7 +47,7 @@ for i in range(50):
         cluster_data = coordinates[np.where(predictions == cluster)[0]]
         found_touching_vertex = False
         for j in range(len(vertices)):
-            if is_cluster_touching_vertex(cluster_data, vertices[j]):
+            if vertices[j] is not None and is_cluster_touching_vertex(cluster_data, vertices[j]):
                 clusters_touching_vertices[cluster] = {"data": cluster_data, "vertex": j}
                 found_touching_vertex = True
                 break
@@ -53,8 +59,9 @@ for i in range(50):
     pca_start = time()
     unassociated_clusters = {}
     _clusters_not_touching_vertices = {}
+    non_None_vertices = [v for v in vertices if v is not None]
     for cluster in clusters_not_touching_vertices:
-        closest_vertex, distance = pca_vertex_association(clusters_not_touching_vertices[cluster]["data"], vertices)
+        closest_vertex, distance = pca_vertex_association(clusters_not_touching_vertices[cluster]["data"], non_None_vertices)
         # ignore clusters more than minimum distance away from nearest vertex
         if distance >= reconstruction.pca.cutoff_distance:
             unassociated_clusters[cluster] = {"data": clusters_not_touching_vertices[cluster]["data"]}
@@ -165,6 +172,8 @@ for i in range(50):
     # fix color bug by adding a point under each vertex at the vertex's location
     drawing_start = time()
     for j in range(len(vertices)):
+        if vertices[j] is None:
+            continue
         new_point = np.hstack((vertices[j], j))
         coords = np.vstack((coords, vertices[j]))
         labels = np.hstack((labels, j))
@@ -179,7 +188,7 @@ for i in range(50):
                                                    all_assoc_clusters[:, 1],
                                                    all_assoc_clusters[:, 2],
                                                    all_assoc_clusters[:, 3])
-    vertex_scatterplot = scatter_vertices(vertices)
+    vertex_scatterplot = scatter_vertices(non_None_vertices)
     draw("drawings/%d-true.html" % i, true_clusters_scatterplot, vertex_scatterplot)    
     if len(unassociated_clusters) > 0:
         unassociated_clusters_scatterplot = scatter_hits(unassociated_clusters[:, 0],
