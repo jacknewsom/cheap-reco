@@ -1,7 +1,6 @@
 from ROOT import TFile
 import numpy as np
 import h5py
-import sys
 import os
 
 '''Utilities for converting ArgonCube style data

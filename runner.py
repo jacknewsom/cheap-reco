@@ -2,7 +2,7 @@ import numpy as np
 import scipy as sp
 import scipy.spatial
 import reconstruction.pca
-from data.event_generator import simulate_interaction
+from data_utils.event_generator import simulate_interaction
 from reconstruction.clustering import cluster_and_cut
 from reconstruction.association import is_cluster_touching_vertex
 from reconstruction.pca import pca_vertex_association

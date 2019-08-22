@@ -110,3 +110,17 @@ def linear_train_loader(filename, batch_size, start_from=0):
                 yield dim, coordinates, features, labels, num_entries_per_event, tuple(f['vertex'][start_index])
             else:
                 yield dim, coordinates, features, labels, num_entries_per_event, (0,0,0)
+
+def load_HDF5_from_dataset_keys(filename, keys, batch_size, start_from=0):
+    with h5py.File(filename, 'r') as f:
+        data = {key: [] for key in keys}
+        for i in range(start_from, start_from+batch_size):
+            for key in data:
+                if key == 'coordinates':
+                    coordinates = [f['voxels_%s' % j][i] for j in ['x', 'y', 'z']]
+                    coordinates = [c.reshape((-1, 1)) for c in coordinates]
+                    coordinates = np.hstack(coordinates)
+                    data[key].append(coordinates)
+                else:
+                    data[key].append(f[key][i])
+        return [data[key] for key in keys]
