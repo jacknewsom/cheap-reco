@@ -29,7 +29,7 @@ def simulate_interaction(event_file, beam_intensity):
     n_events = np.random.poisson(poisson_mean)
     
     # load n_events
-    start_index = np.random.randint(0, 9999-n_events)
+    start_index = np.random.randint(0, 49999-n_events)
     keys = ['coordinates', 'energies', 'vertex', 'pdg_codes', 'kinetic_energies']
     c, e, v, pdg, ke = load_HDF5_from_dataset_keys(event_file, keys, n_events, start_index)
     events = []
@@ -40,6 +40,10 @@ def simulate_interaction(event_file, beam_intensity):
         # reject event if no energetic muon
         if not contains_energetic_muon(pdg[i], ke[i]):
             continue
+        # (temporarily) reject event if vertex outside fiducial volume
+        if not vertex_in_fiducial_volume(v[i]):
+            continue
+        
         events.append({})
         
         events[-1]['coordinates'] = c[i]

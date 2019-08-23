@@ -4,7 +4,7 @@ import scipy.spatial
 import reconstruction.pca
 from data_utils.event_generator import simulate_interaction
 from reconstruction.clustering import cluster_and_cut
-from reconstruction.association import is_cluster_touching_vertex
+from reconstruction.association import is_cluster_touching_vertex_iterative, is_cluster_touching_vertex_clusterwise
 from reconstruction.pca import pca_vertex_association
 from utils.drawing import scatter_hits, scatter_vertices, draw
 from utils.metrics import energy_accuracy, number_accuracy, energy_metrics
@@ -46,8 +46,9 @@ for i in range(50):
     for cluster in cluster_labels:
         cluster_data = coordinates[np.where(predictions == cluster)[0]]
         found_touching_vertex = False
+        touching_fn = is_cluster_touching_vertex_clusterwise if len(cluster_data) < 7500 else is_cluster_touching_vertex_iterative
         for j in range(len(vertices)):
-            if vertices[j] is not None and is_cluster_touching_vertex(cluster_data, vertices[j]):
+            if vertices[j] is not None and touching_fn(cluster_data, vertices[j]):
                 clusters_touching_vertices[cluster] = {"data": cluster_data, "vertex": j}
                 found_touching_vertex = True
                 break
@@ -66,7 +67,6 @@ for i in range(50):
         if distance >= reconstruction.pca.cutoff_distance:
             unassociated_clusters[cluster] = {"data": clusters_not_touching_vertices[cluster]["data"]}
             continue
-        
         for j in range(len(vertices)):
             if np.all(closest_vertex == vertices[j]):
                 _clusters_not_touching_vertices[cluster] = {"data": clusters_not_touching_vertices[cluster]["data"], "vertex": j}
@@ -180,6 +180,7 @@ for i in range(50):
         all_assoc_clusters = np.vstack((all_assoc_clusters, new_point))
         
     # draw graph!
+    '''
     true_clusters_scatterplot = scatter_hits(coords[:, 0],
                                              coords[:, 1],
                                              coords[:, 2],
@@ -203,6 +204,30 @@ for i in range(50):
         draw("drawings/%d-pred-%.3f.html" % (i, e_accuracy),
              associated_clusters_scatterplot,
              vertex_scatterplot)
+    '''
+    scatterplots = []
+    # separate fiducial truth and non-fiducial truth
+    fiducial_c, nonfiducial_c = [], []
+    fiducial_l, nonfiducial_l = [], []
+    for coordinate, label in zip(coords, labs):
+        if label == -1:
+            nonfiducial_c.append(coordinate)
+            nonfiducial_l.append(label)
+        else:
+            fiducial_c.append(coordinate)
+            fiducial_l.append(label)
+    for true_c, true_l in zip([fiducial_c, nonfiducial_c], [fiducial_l, nonfiducial_l]):
+        if true_c != []:
+            true_c = np.vstack(true_c)
+            true_l = np.vstack(true_l)
+            scatterplots.append(scatter_hits(true_c[:, 0],
+                                             true_c[:, 1],
+                                             true_c[:, 2],
+                                             true_l))
+    # separate associated and unassociated prediction
+    
+            
+    
     print("\tGraphs saved in %.3f[s]" % (time() - drawing_start))
     print("\tTotal time elapsed: %.3f[s]" % (time() - data_load_start))
 

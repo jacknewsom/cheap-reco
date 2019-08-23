@@ -4,7 +4,21 @@ from sklearn.metrics import pairwise_distances as dist
 
 touching_distance = 1
 
-def is_cluster_touching_vertex(cluster, vertex):
+def is_cluster_touching_vertex_iterative(cluster, vertex):
+    '''Determines if a cluster is directly touching
+    a vertex. Returns a boolean.
+
+    Keyword arguments:
+    cluster -- (N, 3) numpy array of coordinates in 3D
+    vertex -- (1, 3) numpy array of coordinates in 3D
+    '''
+    for row in cluster:
+        pair = np.vstack((row, vertex))
+        if dist(pair, pair)[0, 1] <= touching_distance:
+            return True
+    return False
+
+def is_cluster_touching_vertex_clusterwise(cluster, vertex):
     '''Determines if a cluster is directly touching
     a vertex. Returns a boolean.
 
@@ -18,3 +32,5 @@ def is_cluster_touching_vertex(cluster, vertex):
         if dist_matr[i, -1] < touching_distance:
             return True
     return False
+
+

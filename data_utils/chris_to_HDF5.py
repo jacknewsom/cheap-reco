@@ -6,7 +6,7 @@ def chris_to_HDF5(filename):
     print("converting %s..." % filename)
     rootfile = TFile(filename)
     tree = rootfile.Get('tree')
-    n_events = 10000 # number of events in each 'chris'-style ROOT file
+    n_events = 50000 # number of events in each 'chris'-style ROOT file
 
     # create custom data type for ragged array
     dt = h5py.special_dtype(vlen=np.dtype('float32'))
