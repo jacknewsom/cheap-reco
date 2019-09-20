@@ -14,7 +14,12 @@ e_accuracies = []
 n_accuracies = []
 e_efficiencies = []
 e_purities = []
-for i in range(50):
+correct_dist_strength_pairs = []
+incorrect_dist_strength_pairs = []
+suppress_drawing = True
+
+for i in range(1000):
+    reconstruction.pca.cutoff_distance = (i % 50) + 1
     print("Analyzing event %d..." % i)
     # load data
     data_load_start = time()
@@ -61,18 +66,25 @@ for i in range(50):
     unassociated_clusters = {}
     _clusters_not_touching_vertices = {}
     non_None_vertices = [v for v in vertices if v is not None]
-    for cluster in clusters_not_touching_vertices:
-        closest_vertex, distance = pca_vertex_association(clusters_not_touching_vertices[cluster]["data"], non_None_vertices)
-        # ignore clusters more than minimum distance away from nearest vertex
-        if distance >= reconstruction.pca.cutoff_distance:
-            unassociated_clusters[cluster] = {"data": clusters_not_touching_vertices[cluster]["data"]}
-            continue
-        for j in range(len(vertices)):
-            if np.all(closest_vertex == vertices[j]):
-                _clusters_not_touching_vertices[cluster] = {"data": clusters_not_touching_vertices[cluster]["data"], "vertex": j}
-        if "vertex" not in _clusters_not_touching_vertices[cluster]:
-            # something's wrong
-            raise RuntimeError("PCA returned vertex not in `vertices`")
+    if non_None_vertices == []:
+        unassociated_clusters = {cluster: {"data": clusters_not_touching_vertices[cluster]["data"]} for cluster in clusters_not_touching_vertices}
+        clusters_not_touching_vertices = {}
+    else:
+        for cluster in clusters_not_touching_vertices:
+            closest_vertex, distance, strength = pca_vertex_association(clusters_not_touching_vertices[cluster]["data"], non_None_vertices)
+            # determine correct cluster label for graphing 2D histogram
+            cluster_label_truth = labels[coordinates.tolist().index(clusters_not_touching_vertices[cluster]['data'][0].tolist())]
+            # ignore clusters more than minimum distance away from nearest vertex
+            if distance >= reconstruction.pca.cutoff_distance:
+                unassociated_clusters[cluster] = {"data": clusters_not_touching_vertices[cluster]["data"]}
+                continue
+            for j in range(len(vertices)):
+                if np.all(closest_vertex == vertices[j]):
+                    _clusters_not_touching_vertices[cluster] = {"data": clusters_not_touching_vertices[cluster]["data"], "vertex": j}
+                if j == cluster_label_truth:
+                    correct_dist_strength_pairs.append((distance, strength))
+                else:
+                    incorrect_dist_strength_pairs.append((distance, strength))            
     clusters_not_touching_vertices = _clusters_not_touching_vertices
     print("\tPCA cluster association complete in %.3f[s]" % (time() - pca_start))
 
@@ -84,8 +96,10 @@ for i in range(50):
         cluster_data = small_coordinates[np.where(small_predictions == small_cluster)[0]]
         mean = np.mean(cluster_data, axis=0).reshape((1, -1))
         closest_vertex, closest_distance = None, np.inf
-        if clusters_touching_vertices == {} and clusters_not_touching_vertices == {}:
-            dist_matrix = sp.spatial.distance_matrix(mean, np.vstack(vertices))
+        if non_None_vertices == []:
+            closest_vertex = -1
+        elif clusters_touching_vertices == {} and clusters_not_touching_vertices == {}:
+            dist_matrix = sp.spatial.distance_matrix(mean, np.vstack(non_None_vertices))
             closest_vertex = np.argmin(dist_matrix)
         else:
             for group in [clusters_touching_vertices, clusters_not_touching_vertices]:
@@ -157,6 +171,8 @@ for i in range(50):
     e_accuracies.append(e_accuracy)
     print("\tEnergy Accuracy calculated: %.3f" % e_accuracy)
     print("\tNumber Accuracy calculated: %.3f" % n_accuracy)
+    print("\tAverage Energy Accuracy so far: %.3f" % (sum(e_accuracies) / len(e_accuracies)))
+    print("\tAverage Number Accuracy so far: %.3f" % (sum(n_accuracies) / len(n_accuracies)))
     
     _energies = np.array([data_dict[k]["energy"] for k in data_dict])
     _predictions = np.array([data_dict[k]["prediction"] for k in data_dict])
@@ -166,8 +182,10 @@ for i in range(50):
     purity = np.nansum(purity.values()) / np.sum(~np.isnan(purity.values()))
     e_efficiencies.append(efficiency)
     e_purities.append(purity)
-    print("\tEnergy Clustering Efficiency calculated: %.3f" % efficiency)
+    print("\n\tEnergy Clustering Efficiency calculated: %.3f" % efficiency)
     print("\tEnergy Clustering Purity calculated: %.3f" % purity)
+    print("\tAverage Energy Clustering Efficiency so far: %.3f" % (sum(e_efficiencies) / len(e_efficiencies)))
+    print("\tAverage Purity Clustering Efficiency so far: %.3f" % (sum(e_purities) / len(e_purities)))
 
     # fix color bug by adding a point under each vertex at the vertex's location
     drawing_start = time()
@@ -179,33 +197,15 @@ for i in range(50):
         labels = np.hstack((labels, j))
         all_assoc_clusters = np.vstack((all_assoc_clusters, new_point))
         
-    # draw graph!
-    '''
-    true_clusters_scatterplot = scatter_hits(coords[:, 0],
-                                             coords[:, 1],
-                                             coords[:, 2],
-                                             labs)
-    associated_clusters_scatterplot = scatter_hits(all_assoc_clusters[:, 0],
-                                                   all_assoc_clusters[:, 1],
-                                                   all_assoc_clusters[:, 2],
-                                                   all_assoc_clusters[:, 3])
-    vertex_scatterplot = scatter_vertices(non_None_vertices)
-    draw("drawings/%d-true.html" % i, true_clusters_scatterplot, vertex_scatterplot)    
-    if len(unassociated_clusters) > 0:
-        unassociated_clusters_scatterplot = scatter_hits(unassociated_clusters[:, 0],
-                                                         unassociated_clusters[:, 1],
-                                                         unassociated_clusters[:, 2],
-                                                         [-1 for k in range(len(unassociated_clusters))])
-        draw("drawings/%d-pred-%.3f.html" % (i, e_accuracy),
-             associated_clusters_scatterplot,
-             unassociated_clusters_scatterplot,
-             vertex_scatterplot)
+    if suppress_drawing is True:
+        print("\tTotal time elapsed: %.3f[s]" % (time() - data_load_start))
+        continue
+    
+    # draw graph!    
+    if non_None_vertices != []:
+        scatterplots = [scatter_vertices(non_None_vertices)]
     else:
-        draw("drawings/%d-pred-%.3f.html" % (i, e_accuracy),
-             associated_clusters_scatterplot,
-             vertex_scatterplot)
-    '''
-    scatterplots = []
+        scatterplots = []
     # separate fiducial truth and non-fiducial truth
     fiducial_c, nonfiducial_c = [], []
     fiducial_l, nonfiducial_l = [], []
@@ -219,14 +219,23 @@ for i in range(50):
     for true_c, true_l in zip([fiducial_c, nonfiducial_c], [fiducial_l, nonfiducial_l]):
         if true_c != []:
             true_c = np.vstack(true_c)
-            true_l = np.vstack(true_l)
+            true_l = np.vstack(true_l).reshape(-1)
             scatterplots.append(scatter_hits(true_c[:, 0],
                                              true_c[:, 1],
                                              true_c[:, 2],
                                              true_l))
-    # separate associated and unassociated prediction
-    
-            
+    draw("drawings/%d-true.html" % i, *scatterplots)
+    scatterplots = [scatterplots[0]]
+    scatterplots.append(scatter_hits(all_assoc_clusters[:, 0],
+                                     all_assoc_clusters[:, 1],
+                                     all_assoc_clusters[:, 2],
+                                     all_assoc_clusters[:, 3]))
+    if len(unassociated_clusters) > 0:
+        scatterplots.append(scatter_hits(unassociated_clusters[:, 0],
+                                         unassociated_clusters[:, 1],
+                                         unassociated_clusters[:, 2],
+                                         [-1 for k in range(len(unassociated_clusters))]))
+    draw("drawings/%d-pred-%.3f.html" % (i, e_accuracy), *scatterplots)
     
     print("\tGraphs saved in %.3f[s]" % (time() - drawing_start))
     print("\tTotal time elapsed: %.3f[s]" % (time() - data_load_start))
@@ -239,3 +248,12 @@ print("\n\nTotal Energy Accuracy: %.3f" % e_accuracy)
 print("Total Number Accuracy: %.3f" % n_accuracy)
 print("Total Energy Efficiency: %.3f" % e_efficiency)
 print("Total Energy Purity: %.3f" % e_purity)
+
+import json
+with open('correct.json', 'w') as f:
+    correct_dist_strength_pairs = [(c[0], c[1].astype('float64')) for c in correct_dist_strength_pairs]
+    json.dump(correct_dist_strength_pairs, f)
+with open('incorrect.json', 'w') as f:
+    incorrect_dist_strength_pairs = [(c[0], c[1].astype('float64')) for c in incorrect_dist_strength_pairs]
+    json.dump(incorrect_dist_strength_pairs, f)
+print("JSONs saved.")

@@ -41,8 +41,8 @@ def simulate_interaction(event_file, beam_intensity):
         if not contains_energetic_muon(pdg[i], ke[i]):
             continue
         # (temporarily) reject event if vertex outside fiducial volume
-        if not vertex_in_fiducial_volume(v[i]):
-            continue
+        # if not vertex_in_fiducial_volume(v[i]):
+        #     continue
         
         events.append({})
         

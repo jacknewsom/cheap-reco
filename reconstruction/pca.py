@@ -2,7 +2,7 @@ from sklearn.decomposition import PCA
 import numpy as np
 import math
 
-cutoff_distance = 120
+cutoff_distance = 10
 
 def t(p, q, r):
     ''' Helper function for closest_vertex
@@ -55,12 +55,13 @@ def pca(H):
     pc_y = pca.components_[:, 1]
     pc_z = pca.components_[:, 2]
     pc_mag = pca.explained_variance_[0]
+    pc_strength = pc_mag / pca.explained_variance_[1]
     
     p = np.array([pca.mean_[0], pca.mean_[1], pca.mean_[2]])
     q = np.array([pca.mean_[0] + pc_x[0] * math.sqrt(pc_mag),
                   pca.mean_[1] + pc_y[0] * math.sqrt(pc_mag),
                   pca.mean_[2] + pc_z[0] * math.sqrt(pc_mag)])
-    return p, q
+    return p, q, pc_strength
     
     
 def pca_vertex_association(H, V):
@@ -74,6 +75,7 @@ def pca_vertex_association(H, V):
     --- Output ---
     Vertex (1x3) from list V, associated with cluster H'''
 
-    p, q = pca(H)
-    return closest_vertex(p, q, V)
+    p, q, strength = pca(H)
+    vertex, min_distance = closest_vertex(p, q, V)
+    return vertex, min_distance, strength
     
