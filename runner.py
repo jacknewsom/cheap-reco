@@ -6,7 +6,6 @@ from data_utils.event_generator import simulate_interaction
 from reconstruction.clustering import cluster_and_cut
 from reconstruction.association import is_cluster_touching_vertex_iterative, is_cluster_touching_vertex_clusterwise
 from reconstruction.pca import pca_vertex_association
-from utils.drawing import scatter_hits, scatter_vertices, draw
 from utils.metrics import energy_accuracy, number_accuracy, energy_metrics
 from time import time
 
@@ -17,6 +16,9 @@ e_purities = []
 correct_dist_strength_pairs = []
 incorrect_dist_strength_pairs = []
 suppress_drawing = True
+if not suppress_drawing:
+    from utils.drawing import scatter_hits, scatter_vertices, draw
+
 
 for i in range(1000):
     reconstruction.pca.cutoff_distance = (i % 50) + 1
