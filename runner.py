@@ -252,10 +252,11 @@ print("Total Energy Efficiency: %.3f" % e_efficiency)
 print("Total Energy Purity: %.3f" % e_purity)
 
 import json
-with open('correct.json', 'w') as f:
+now = int(time)
+with open('cut_data/correct-%d.json' % now, 'w') as f:
     correct_dist_strength_pairs = [(c[0], c[1].astype('float64')) for c in correct_dist_strength_pairs]
     json.dump(correct_dist_strength_pairs, f)
-with open('incorrect.json', 'w') as f:
+with open('cut_data/incorrect-%d.json' % now, 'w') as f:
     incorrect_dist_strength_pairs = [(c[0], c[1].astype('float64')) for c in incorrect_dist_strength_pairs]
     json.dump(incorrect_dist_strength_pairs, f)
 print("JSONs saved.")
