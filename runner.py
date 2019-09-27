@@ -1,5 +1,6 @@
 import numpy as np
 import scipy as sp
+import argparse
 import scipy.spatial
 import reconstruction.pca
 from data_utils.event_generator import simulate_interaction
@@ -9,19 +10,34 @@ from reconstruction.pca import pca_vertex_association
 from utils.metrics import energy_accuracy, number_accuracy, energy_metrics
 from time import time
 
+
+parser = argparse.ArgumentParser(description="Run reconstruction")
+parser.add_argument('--suppres_draw', dest='suppress_drawing', default=True,
+                    help='suppress drawing of output graphs')
+parser.add_argument('--pca_dist', dest='cutoff_distance', default=35,
+                    help='PCA cylinder rejection distance')
+parser.add_argument('--cluster_size', dest='cluster_size', default=25,
+                    help='minimum cluster size for rejection')
+parser.add_argument('--n', dest='num_instances', default=1000,
+                    help='number of instances to run over')
+args = parser.parse_args()
+
+suppress_drawing = bool(args.suppress_drawing)
+reconstruction.pca.cutoff_distance = int(args.cutoff_distance)
+cluster_cut_size = int(args.cluster_size)
+num_instances = int(args.num_instances)
+
 e_accuracies = []
 n_accuracies = []
 e_efficiencies = []
 e_purities = []
 correct_dist_strength_pairs = []
 incorrect_dist_strength_pairs = []
-suppress_drawing = True
+
 if not suppress_drawing:
     from utils.drawing import scatter_hits, scatter_vertices, draw
 
-
-for i in range(1000):
-    reconstruction.pca.cutoff_distance = (i % 50) + 1
+for i in range(num_instances):
     print("Analyzing event %d..." % i)
     # load data
     data_load_start = time()
@@ -38,7 +54,7 @@ for i in range(1000):
     features = [f.reshape((-1, 1)) for f in features]
     
     # cluster and cut data
-    coordinates, labels, features, predictions = cluster_and_cut(np.vstack(coordinates)[:, :3], np.vstack(labels), np.vstack(features), 25)
+    coordinates, labels, features, predictions = cluster_and_cut(np.vstack(coordinates)[:, :3], np.vstack(labels), np.vstack(features), cluster_cut_size)
     # separate small and large signal clusters
     small_coordinates, small_labels = coordinates[1], labels[1]
     small_features, small_predictions = features[1], predictions[1]
@@ -252,7 +268,7 @@ print("Total Energy Efficiency: %.3f" % e_efficiency)
 print("Total Energy Purity: %.3f" % e_purity)
 
 import json
-now = int(time)
+now = int(time())
 with open('cut_data/correct-%d.json' % now, 'w') as f:
     correct_dist_strength_pairs = [(c[0], c[1].astype('float64')) for c in correct_dist_strength_pairs]
     json.dump(correct_dist_strength_pairs, f)
