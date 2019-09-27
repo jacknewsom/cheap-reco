@@ -12,7 +12,7 @@ from time import time
 
 
 parser = argparse.ArgumentParser(description="Run reconstruction")
-parser.add_argument('--suppres_draw', dest='suppress_drawing', default=True,
+parser.add_argument('--suppress_draw', dest='suppress_drawing', default=True,
                     help='suppress drawing of output graphs')
 parser.add_argument('--pca_dist', dest='cutoff_distance', default=35,
                     help='PCA cylinder rejection distance')
