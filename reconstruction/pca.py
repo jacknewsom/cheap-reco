@@ -49,21 +49,24 @@ def pca(H):
     --- Output ---
     Points p and q lying on principal component (each 1x3) '''
     
-    pca = PCA(n_components=3)
+    pca = PCA(n_components=min(len(H), 3))
     pca.fit(H)
-    pc_x = pca.components_[:, 0]
-    pc_y = pca.components_[:, 1]
-    pc_z = pca.components_[:, 2]
+    pc_components = [pca.components_[:, i] for i in range(pca.components_.shape[1])]
+    p = np.array([pca.mean_[i] for i in range(3)])
     pc_mag = pca.explained_variance_[0]
-    pc_strength = pc_mag / pca.explained_variance_[1]
+    if len(H) == 2:
+        q = np.array([pca.mean_[0] + pc_components[0][0] * math.sqrt(pc_mag),
+                      pca.mean_[1] + pc_components[1][0] * math.sqrt(pc_mag),
+                      0])
+    elif len(H) == 1:
+        q = np.array([0, 0, 0])
+    else:
+        q = np.array([pca.mean_[0] + pc_components[0][0] * math.sqrt(pc_mag),
+                      pca.mean_[1] + pc_components[1][0] * math.sqrt(pc_mag),
+                      pca.mean_[2] + pc_components[2][0] * math.sqrt(pc_mag)])
     
-    p = np.array([pca.mean_[0], pca.mean_[1], pca.mean_[2]])
-    q = np.array([pca.mean_[0] + pc_x[0] * math.sqrt(pc_mag),
-                  pca.mean_[1] + pc_y[0] * math.sqrt(pc_mag),
-                  pca.mean_[2] + pc_z[0] * math.sqrt(pc_mag)])
-    return p, q, pc_strength
-    
-    
+    return p, q, pca.explained_variance_
+     
 def pca_vertex_association(H, V):
     ''' Main function
     Purpose: Associate a cluster with a vertex using pca
@@ -78,4 +81,3 @@ def pca_vertex_association(H, V):
     p, q, strength = pca(H)
     vertex, min_distance = closest_vertex(p, q, V)
     return vertex, min_distance, strength
-    
