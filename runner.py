@@ -1,12 +1,13 @@
 import numpy as np
 import scipy as sp
+import json
 import argparse
 import scipy.spatial
 import reconstruction.pca
 from data_utils.event_generator import simulate_interaction
 from reconstruction.clustering import cluster_and_cut
 from reconstruction.association import is_cluster_touching_vertex_iterative, is_cluster_touching_vertex_clusterwise
-from reconstruction.pca import pca_vertex_association
+from reconstruction.pca import pca_vertex_association, pca, dist
 from utils.metrics import energy_accuracy, number_accuracy, energy_metrics
 from time import time
 
@@ -16,7 +17,7 @@ parser.add_argument('--suppress_draw', dest='suppress_drawing', default=True,
                     help='suppress drawing of output graphs')
 parser.add_argument('--pca_dist', dest='cutoff_distance', default=35,
                     help='PCA cylinder rejection distance')
-parser.add_argument('--cluster_size', dest='cluster_size', default=25,
+parser.add_argument('--cluster_size', dest='cluster_size', default=0,
                     help='minimum cluster size for rejection')
 parser.add_argument('--n', dest='num_instances', default=1000,
                     help='number of instances to run over')
@@ -37,6 +38,8 @@ incorrect_dist_strength_pairs = []
 if not suppress_drawing:
     from utils.drawing import scatter_hits, scatter_vertices, draw
 
+run_index = int(time())
+print("Run index %d" % run_index)
 for i in range(num_instances):
     print("Analyzing event %d..." % i)
     # load data
@@ -55,224 +58,77 @@ for i in range(num_instances):
     
     # cluster and cut data
     coordinates, labels, features, predictions = cluster_and_cut(np.vstack(coordinates)[:, :3], np.vstack(labels), np.vstack(features), cluster_cut_size)
-    # separate small and large signal clusters
-    small_coordinates, small_labels = coordinates[1], labels[1]
-    small_features, small_predictions = features[1], predictions[1]
-    coordinates, labels, features, predictions = coordinates[0], labels[0], features[0], predictions[0]
+    coordinates, labels, features, predictions = np.vstack(coordinates), np.hstack(labels), np.hstack(features), np.hstack(predictions)  
     print("\tData loaded in %.3f[s]" % (time() -  data_load_start))
 
-    # split remaining data into two categories: vertex-touching and not
-    touching_cluster_start = time()
+    # Organize data into clusters
     cluster_labels = np.unique(predictions)
-    clusters_touching_vertices = {}
-    clusters_not_touching_vertices = {}
+    clusters = {}
     for cluster in cluster_labels:
-        cluster_data = coordinates[np.where(predictions == cluster)[0]]
-        found_touching_vertex = False
-        touching_fn = is_cluster_touching_vertex_clusterwise if len(cluster_data) < 7500 else is_cluster_touching_vertex_iterative
-        for j in range(len(vertices)):
-            if vertices[j] is not None and touching_fn(cluster_data, vertices[j]):
-                clusters_touching_vertices[cluster] = {"data": cluster_data, "vertex": j}
-                found_touching_vertex = True
-                break
-        if not found_touching_vertex:
-            clusters_not_touching_vertices[cluster] = {"data": cluster_data}
-    print("\tTouching cluster association complete in %.3f[s]" % (time() - touching_cluster_start))
-    
-    # run PCA on clusters that do not touch vertices directly
+        cluster_idx = np.where(predictions == cluster)[0]
+        cluster_data = coordinates[cluster_idx]
+        cluster_label = labels[cluster_idx]
+        cluster_features = features[cluster_idx]
+        clusters[cluster] = {"data": cluster_data, "label": cluster_label, "features": cluster_features}
+
+    # Place each DBSCAN noise point in own cluster
+    if -1 in clusters.keys():
+        n_clusters = max(clusters.keys())
+        for point in range(len(clusters[-1]["data"])):
+            clusters[n_clusters+point+1] = {"data": clusters[-1]["data"][point].reshape((1,-1)), "label": [clusters[-1]["label"][point]], "features": [clusters[-1]["features"][point]]}
+        del clusters[-1]
+            
+    # run PCA on clusters
     pca_start = time()
-    unassociated_clusters = {}
-    _clusters_not_touching_vertices = {}
     non_None_vertices = [v for v in vertices if v is not None]
     if non_None_vertices == []:
-        unassociated_clusters = {cluster: {"data": clusters_not_touching_vertices[cluster]["data"]} for cluster in clusters_not_touching_vertices}
-        clusters_not_touching_vertices = {}
+        for cluster in clusters:
+            clusters[cluster]["prediction"] = -1
     else:
-        for cluster in clusters_not_touching_vertices:
-            closest_vertex, distance, strength = pca_vertex_association(clusters_not_touching_vertices[cluster]["data"], non_None_vertices)
-            # determine correct cluster label for graphing 2D histogram
-            cluster_label_truth = labels[coordinates.tolist().index(clusters_not_touching_vertices[cluster]['data'][0].tolist())]
-            # ignore clusters more than minimum distance away from nearest vertex
-            if distance >= reconstruction.pca.cutoff_distance:
-                unassociated_clusters[cluster] = {"data": clusters_not_touching_vertices[cluster]["data"]}
-                continue
+        for cluster in clusters:
+            p, q, explained_variance = pca(clusters[cluster]["data"])
+            clusters[cluster]["PCA_explained_variance"] = explained_variance
+            clusters[cluster]["vertices"] = {}
+            # for each vertex, save DOCA and distance to closest point in cluster
+            min_dist = np.inf
+            min_vertex = -1
             for j in range(len(vertices)):
-                if np.all(closest_vertex == vertices[j]):
-                    _clusters_not_touching_vertices[cluster] = {"data": clusters_not_touching_vertices[cluster]["data"], "vertex": j}
-                if j == cluster_label_truth:
-                    correct_dist_strength_pairs.append((distance, strength))
-                else:
-                    incorrect_dist_strength_pairs.append((distance, strength))            
-    clusters_not_touching_vertices = _clusters_not_touching_vertices
+                clusters[cluster]["vertices"][j] = {}
+                if vertices[j] is None:
+                    continue
+                clusters[cluster]["vertices"][j]["DOCA"] = dist(p, q, vertices[j])
+                clusters[cluster]["vertices"][j]["distance_to_closest_point"] = np.amin(sp.spatial.distance_matrix(clusters[cluster]["data"], vertices[j].reshape((1, -1))))
+                if clusters[cluster]["vertices"][j]["DOCA"] < min_dist:
+                    min_dist = clusters[cluster]["vertices"][j]["DOCA"]
+                    min_vertex = j
+            clusters[cluster]["prediction"] = min_vertex
     print("\tPCA cluster association complete in %.3f[s]" % (time() - pca_start))
 
-    # associate small clusters with same vertex as nearest big cluster
-    small_cluster_start = time()
-    small_clusters = {}
-    cluster_labels = np.unique(small_predictions)
-    for small_cluster in cluster_labels:
-        cluster_data = small_coordinates[np.where(small_predictions == small_cluster)[0]]
-        mean = np.mean(cluster_data, axis=0).reshape((1, -1))
-        closest_vertex, closest_distance = None, np.inf
-        if non_None_vertices == []:
-            closest_vertex = -1
-        elif clusters_touching_vertices == {} and clusters_not_touching_vertices == {}:
-            dist_matrix = sp.spatial.distance_matrix(mean, np.vstack(non_None_vertices))
-            closest_vertex = np.argmin(dist_matrix)
-        else:
-            for group in [clusters_touching_vertices, clusters_not_touching_vertices]:
-                for big_cluster in group:
-                    dist_matrix = sp.spatial.distance_matrix(mean, group[big_cluster]['data'])
-                    group_closest_distance = np.amin(dist_matrix)
-                    if closest_distance > group_closest_distance:
-                        closest_distance = group_closest_distance
-                        closest_vertex = group[big_cluster]['vertex']
-        small_clusters[small_cluster] = {}
-        small_clusters[small_cluster]['data'] = cluster_data
-        small_clusters[small_cluster]['vertex'] = closest_vertex
-    print("\tSmall cluster nearest-neighbor association complete in %.3f[s]" % (time() - small_cluster_start))
-        
-    # restructure data for graphing ease
-    for group in [clusters_touching_vertices, clusters_not_touching_vertices, small_clusters]:
-        for cluster in group:
-            cluster_data = group[cluster]['data']
-            cluster_vtx = group[cluster]['vertex']
-            cluster_label = np.full((cluster_data.shape[0], 1), cluster_vtx)
-            group[cluster]['data'] = np.hstack((cluster_data, cluster_label))
-
-    # add small clusters to clusters_not_touching_vertices
-    for small_cluster in small_clusters:
-        clusters_not_touching_vertices[small_cluster] = small_clusters[small_cluster]
-
-    clusters_touching_vertices = [clusters_touching_vertices[c]['data'] for c in clusters_touching_vertices]
-    clusters_not_touching_vertices = [clusters_not_touching_vertices[c]['data'] for c in clusters_not_touching_vertices]
-    unassociated_clusters = [unassociated_clusters[c]['data'] for c in unassociated_clusters]
-    if len(clusters_touching_vertices) == 0 and len(clusters_not_touching_vertices) != 0:
-        all_assoc_clusters = np.vstack(clusters_not_touching_vertices)
-    elif len(clusters_touching_vertices) != 0 and len(clusters_not_touching_vertices) == 0:
-        all_assoc_clusters = np.vstack(clusters_touching_vertices)
-    elif len(clusters_touching_vertices) == 0 and len(clusters_not_touching_vertices) == 0:
-        # no clusters remaining after cut
-        continue
-    else:
-        all_assoc_clusters = np.vstack([np.vstack(clusters_touching_vertices), np.vstack(clusters_not_touching_vertices)])
-
-    # calculate accuracy
-    if len(unassociated_clusters) > 0:
-        unassociated_clusters = np.vstack(unassociated_clusters)
-        unassoc_label = np.full((unassociated_clusters.shape[0], 1), -1)
-        unassoc_with_label = np.hstack((unassociated_clusters, unassoc_label))
-        all_clusters = np.vstack((all_assoc_clusters, unassoc_with_label))
-    else:
-        all_clusters = all_assoc_clusters
-        
-    data_dict = {}
-    coords = np.vstack((small_coordinates, coordinates))
-    feats = np.hstack((small_features, features))
-    labs = np.hstack((small_labels, labels))
-    for j in range(coords.shape[0]):
-        if tuple(coords[j]) not in data_dict:
-            data_dict[tuple(coords[j])] = {}
-        if tuple(all_clusters[j][:-1]) not in data_dict:
-            data_dict[tuple(all_clusters[j][:-1])] = {}
-        # label
-        data_dict[tuple(coords[j])]["label"] = labs[j]
-        data_dict[tuple(coords[j])]["energy"] = feats[j]
-        # prediction
-        data_dict[tuple(all_clusters[j][:-1])]["prediction"] = all_clusters[j][-1]
-
-    correct_energies = [data_dict[k]["energy"] for k in data_dict if data_dict[k]["prediction"] == data_dict[k]["label"]]
-    e_accuracy = sum(correct_energies) / sum(feats)
-    as_list = [data_dict[k]["prediction"] == data_dict[k]["label"] for k in data_dict]
-    n_accuracy = float(sum(as_list)) / len(as_list)
-    n_accuracies.append(n_accuracy)
-    e_accuracies.append(e_accuracy)
-    print("\tEnergy Accuracy calculated: %.3f" % e_accuracy)
-    print("\tNumber Accuracy calculated: %.3f" % n_accuracy)
-    print("\tAverage Energy Accuracy so far: %.3f" % (sum(e_accuracies) / len(e_accuracies)))
-    print("\tAverage Number Accuracy so far: %.3f" % (sum(n_accuracies) / len(n_accuracies)))
+    # Fix cut vertices problem
+    vertices_ = {j: vertices[j] for j in range(len(vertices)) if vertices[j] is not None}
     
-    _energies = np.array([data_dict[k]["energy"] for k in data_dict])
-    _predictions = np.array([data_dict[k]["prediction"] for k in data_dict])
-    _labels = np.array([data_dict[k]["label"] for k in data_dict])
-    efficiency, purity = energy_metrics(_energies, _predictions, _labels)
-    efficiency = np.nansum(efficiency.values()) / np.sum(~np.isnan(efficiency.values()))
-    purity = np.nansum(purity.values()) / np.sum(~np.isnan(purity.values()))
-    e_efficiencies.append(efficiency)
-    e_purities.append(purity)
-    print("\n\tEnergy Clustering Efficiency calculated: %.3f" % efficiency)
-    print("\tEnergy Clustering Purity calculated: %.3f" % purity)
-    print("\tAverage Energy Clustering Efficiency so far: %.3f" % (sum(e_efficiencies) / len(e_efficiencies)))
-    print("\tAverage Purity Clustering Efficiency so far: %.3f" % (sum(e_purities) / len(e_purities)))
+    # Calculate accuracy
+    correctly_labeled = 0
+    for cluster in clusters:
+        clusters[cluster]["all_vertices"] = vertices_
+        vertices_keys = clusters[cluster]["vertices"].keys()
+        for vertex in vertices_keys:
+            if clusters[cluster]["vertices"][vertex] == {}:
+                del clusters[cluster]["vertices"][vertex]
+        for label in clusters[cluster]['label']:
+            if label == clusters[cluster]['prediction']:
+                correctly_labeled += 1
 
-    # fix color bug by adding a point under each vertex at the vertex's location
-    drawing_start = time()
-    for j in range(len(vertices)):
-        if vertices[j] is None:
-            continue
-        new_point = np.hstack((vertices[j], j))
-        coords = np.vstack((coords, vertices[j]))
-        labels = np.hstack((labels, j))
-        all_assoc_clusters = np.vstack((all_assoc_clusters, new_point))
+    # Prep stuff for JSON
+    for cluster in clusters:
+        clusters[cluster]['PCA_explained_variance'] = clusters[cluster]['PCA_explained_variance'].tolist()
+        clusters[cluster]['data'] = clusters[cluster]['data'].tolist()
+        clusters[cluster]['label'] = np.copy(clusters[cluster]['label']).tolist()
+        clusters[cluster]['features'] = np.copy(clusters[cluster]['features']).tolist()
+        for vertex in clusters[cluster]['all_vertices']:
+            clusters[cluster]['all_vertices'][vertex] = np.copy(clusters[cluster]['all_vertices'][vertex]).tolist()
         
-    if suppress_drawing is True:
-        print("\tTotal time elapsed: %.3f[s]" % (time() - data_load_start))
-        continue
-    
-    # draw graph!    
-    if non_None_vertices != []:
-        scatterplots = [scatter_vertices(non_None_vertices)]
-    else:
-        scatterplots = []
-    # separate fiducial truth and non-fiducial truth
-    fiducial_c, nonfiducial_c = [], []
-    fiducial_l, nonfiducial_l = [], []
-    for coordinate, label in zip(coords, labs):
-        if label == -1:
-            nonfiducial_c.append(coordinate)
-            nonfiducial_l.append(label)
-        else:
-            fiducial_c.append(coordinate)
-            fiducial_l.append(label)
-    for true_c, true_l in zip([fiducial_c, nonfiducial_c], [fiducial_l, nonfiducial_l]):
-        if true_c != []:
-            true_c = np.vstack(true_c)
-            true_l = np.vstack(true_l).reshape(-1)
-            scatterplots.append(scatter_hits(true_c[:, 0],
-                                             true_c[:, 1],
-                                             true_c[:, 2],
-                                             true_l))
-    draw("drawings/%d-true.html" % i, *scatterplots)
-    scatterplots = [scatterplots[0]]
-    scatterplots.append(scatter_hits(all_assoc_clusters[:, 0],
-                                     all_assoc_clusters[:, 1],
-                                     all_assoc_clusters[:, 2],
-                                     all_assoc_clusters[:, 3]))
-    if len(unassociated_clusters) > 0:
-        scatterplots.append(scatter_hits(unassociated_clusters[:, 0],
-                                         unassociated_clusters[:, 1],
-                                         unassociated_clusters[:, 2],
-                                         [-1 for k in range(len(unassociated_clusters))]))
-    draw("drawings/%d-pred-%.3f.html" % (i, e_accuracy), *scatterplots)
-    
-    print("\tGraphs saved in %.3f[s]" % (time() - drawing_start))
-    print("\tTotal time elapsed: %.3f[s]" % (time() - data_load_start))
+    with open("jsons/run-%d_event-%d.json" % (run_index, i), "w") as f:
+        json.dump(clusters, f)
 
-n_accuracy = float(sum(n_accuracies)) / len(n_accuracies)
-e_accuracy = float(sum(e_accuracies)) / len(e_accuracies)
-e_efficiency = float(sum(e_efficiencies)) / len(e_efficiencies)
-e_purity = float(sum(e_purities)) / len(e_purities)
-print("\n\nTotal Energy Accuracy: %.3f" % e_accuracy)
-print("Total Number Accuracy: %.3f" % n_accuracy)
-print("Total Energy Efficiency: %.3f" % e_efficiency)
-print("Total Energy Purity: %.3f" % e_purity)
-
-import json
-now = int(time())
-with open('cut_data/correct-%d.json' % now, 'w') as f:
-    correct_dist_strength_pairs = [(c[0], c[1].astype('float64')) for c in correct_dist_strength_pairs]
-    json.dump(correct_dist_strength_pairs, f)
-with open('cut_data/incorrect-%d.json' % now, 'w') as f:
-    incorrect_dist_strength_pairs = [(c[0], c[1].astype('float64')) for c in incorrect_dist_strength_pairs]
-    json.dump(incorrect_dist_strength_pairs, f)
-print("JSONs saved.")
+    print("\tTotal time elapsed %.3f[s]" % (time() - data_load_start))
