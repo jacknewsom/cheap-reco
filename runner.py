@@ -1,6 +1,7 @@
 import numpy as np
 import scipy as sp
-import json
+import os
+import h5py
 import argparse
 import scipy.spatial
 import reconstruction.pca
@@ -38,6 +39,9 @@ incorrect_dist_strength_pairs = []
 if not suppress_drawing:
     from utils.drawing import scatter_hits, scatter_vertices, draw
 
+if not os.path.isdir('reconstruction_output'):
+    os.mkdir('reconstruction_output')
+    
 run_index = int(time())
 print("Run index %d" % run_index)
 for i in range(num_instances):
@@ -117,18 +121,21 @@ for i in range(num_instances):
                 del clusters[cluster]["vertices"][vertex]
         for label in clusters[cluster]['label']:
             if label == clusters[cluster]['prediction']:
-                correctly_labeled += 1
+                correctly_labeled += 1        
 
-    # Prep stuff for JSON
-    for cluster in clusters:
-        clusters[cluster]['PCA_explained_variance'] = clusters[cluster]['PCA_explained_variance'].tolist()
-        clusters[cluster]['data'] = clusters[cluster]['data'].tolist()
-        clusters[cluster]['label'] = np.copy(clusters[cluster]['label']).tolist()
-        clusters[cluster]['features'] = np.copy(clusters[cluster]['features']).tolist()
-        for vertex in clusters[cluster]['all_vertices']:
-            clusters[cluster]['all_vertices'][vertex] = np.copy(clusters[cluster]['all_vertices'][vertex]).tolist()
-        
-    with open("jsons/run-%d_event-%d.json" % (run_index, i), "w") as f:
-        json.dump(clusters, f)
-
+    write_time = time()
+    with h5py.File("reconstruction_output/run-%d.hdf5" % run_index, "w", rdcc_nbytes=5 * 10**8) as f:
+        for cluster in clusters:
+            cluster_group = f.create_group("event-%d_cluster-%d" % (i, cluster))
+            cluster_group.create_dataset("hit_data", data=clusters[cluster]["data"], chunks=True)
+            cluster_group.create_dataset("energy", data=clusters[cluster]["features"], chunks=True)
+            cluster_group.create_dataset("PCA_component_strength", data=clusters[cluster]["PCA_explained_variance"], chunks=True)
+            cluster_group.create_dataset("true_vertex", data=clusters[cluster]["label"], chunks=True)
+            vertices = cluster_group.create_group("vertices")
+            for vertex in vertices_:
+                vertex_ = vertices.create_group("vertex-%d" % vertex)
+                vertex_.create_dataset('coordinates', data=vertices_[vertex])
+                vertex_.create_dataset('DOCA', data=clusters[cluster]['vertices'][vertex]['DOCA'])
+                vertex_.create_dataset('distance_to_closest_point', data=clusters[cluster]['vertices'][vertex]['distance_to_closest_point'])
+    print("\tOutput saved to reconstruction_output/run-%d.hdf5 in %.3f[s]" % (run_index, time() - write_time))
     print("\tTotal time elapsed %.3f[s]" % (time() - data_load_start))
