@@ -14,20 +14,10 @@ from time import time
 
 
 parser = argparse.ArgumentParser(description="Run reconstruction")
-parser.add_argument('--suppress_draw', dest='suppress_drawing', default=True,
-                    help='suppress drawing of output graphs')
-parser.add_argument('--pca_dist', dest='cutoff_distance', default=35,
-                    help='PCA cylinder rejection distance')
-parser.add_argument('--cluster_size', dest='cluster_size', default=0,
-                    help='minimum cluster size for rejection')
-parser.add_argument('--n', dest='num_instances', default=1000,
-                    help='number of instances to run over')
+parser.add_argument('-n', '--nspills', dest='nspills', type=int, default=1000, help='number of spills')
+parser.add_argument('--input_file', dest='input_file', default='jack.hdf5', help='full path to input file')
+parser.add_argument('--beam_intensity', dest='beam_intensity', default=1, help='beam intensity in MW')
 args = parser.parse_args()
-
-suppress_drawing = bool(args.suppress_drawing)
-reconstruction.pca.cutoff_distance = int(args.cutoff_distance)
-cluster_cut_size = int(args.cluster_size)
-num_instances = int(args.num_instances)
 
 e_accuracies = []
 n_accuracies = []
@@ -36,21 +26,28 @@ e_purities = []
 correct_dist_strength_pairs = []
 incorrect_dist_strength_pairs = []
 
-if not suppress_drawing:
-    from utils.drawing import scatter_hits, scatter_vertices, draw
-
 if not os.path.isdir('reconstruction_output'):
     os.mkdir('reconstruction_output')
     
 run_index = int(time())
 print("Run index %d" % run_index)
-for i in range(num_instances):
+current_event = 0
+for i in range(args.nspills):
     print("Analyzing event %d..." % i)
     # load data
     data_load_start = time()
     events = []
-    while len(events) == 0:
-        events = simulate_interaction("jack.hdf5", 1)
+
+    # approximately 124 events per spill per megawatt at 574m
+    poisson_mean = 124 * args.beam_intensity
+    n_events = np.random.poisson(poisson_mean)
+
+    while events is not None and len(events) == 0:
+        events = simulate_interaction(args.input_file, current_event, n_events)
+    if events is None:
+        print "Ran out of events in this file"
+        break
+    current_event += n_events
     coordinates = [events[j]['coordinates'] for j in range(len(events))]
     features = [events[j]['energies'] for j in range(len(events))]
     vertices = [events[j]['vertex'] for j in range(len(events))]
@@ -128,9 +125,9 @@ for i in range(num_instances):
         for cluster in clusters:
             cluster_group = f.create_group("event-%d_cluster-%d" % (i, cluster))
             cluster_group.create_dataset("n_hits", data=clusters[cluster]["data"].shape[0])
-            cluster_group.create_dataset("energy", data=clusters[cluster]["features"])
-            cluster_group.create_dataset("PCA_component_strength", data=clusters[cluster]["PCA_explained_variance"])
-            cluster_group.create_dataset("true_vertex", data=clusters[cluster]["label"])
+            cluster_group.create_dataset("energy", data=clusters[cluster]["features"], chunks=True)
+            cluster_group.create_dataset("PCA_component_strength", data=clusters[cluster]["PCA_explained_variance"], chunks=True)
+            cluster_group.create_dataset("true_vertex", data=clusters[cluster]["label"], chunks=True)
             vertices = cluster_group.create_group("vertices")
             for vertex in vertices_:
                 vertex_ = vertices.create_group("vertex-%d" % vertex)
