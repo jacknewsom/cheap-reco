@@ -14,7 +14,7 @@ from time import time
 
 
 parser = argparse.ArgumentParser(description="Run reconstruction")
-parser.add_argument('-n', '--nspills', dest='nspills', type=int, default=1000, help='number of spills')
+parser.add_argument('--n', '--nspills', dest='nspills', type=int, default=1000, help='number of spills')
 parser.add_argument('--input_file', dest='input_file', default='jack.hdf5', help='full path to input file')
 parser.add_argument('--beam_intensity', dest='beam_intensity', default=1, help='beam intensity in MW')
 args = parser.parse_args()
@@ -43,7 +43,7 @@ for i in range(args.nspills):
     n_events = np.random.poisson(poisson_mean)
 
     while events is not None and len(events) == 0:
-        events = simulate_interaction(args.input_file, current_event, n_events)
+        events = simulate_interaction(args.input_file, n_events, current_event)
     if events is None:
         print "Ran out of events in this file"
         break
@@ -58,8 +58,12 @@ for i in range(args.nspills):
     features = [f.reshape((-1, 1)) for f in features]
     
     # cluster and cut data
-    coordinates, labels, features, predictions = cluster_and_cut(np.vstack(coordinates)[:, :3], np.vstack(labels), np.vstack(features), cluster_cut_size)
-    coordinates, labels, features, predictions = np.vstack(coordinates), np.hstack(labels), np.hstack(features), np.hstack(predictions)  
+    coordinates, labels, features, predictions = cluster_and_cut(np.vstack(coordinates)[:, :3], np.vstack(labels), np.vstack(features), 0)
+    coordinates, labels, features, predictions = np.vstack(coordinates), np.hstack(labels), np.hstack(features), np.hstack(predictions)
+
+    # cut hits with less than 0.5MeV
+    min_energy_idx = np.where(features > 0.5)
+    coordinates, labels, features, predictions = coordinates[min_energy_idx], labels[min_energy_idx], features[min_energy_idx], predictions[min_energy_idx]
     print("\tData loaded in %.3f[s]" % (time() -  data_load_start))
 
     # Organize data into clusters

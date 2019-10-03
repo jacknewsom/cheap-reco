@@ -39,12 +39,7 @@ def simulate_interaction(event_file, n_events, start_index):
         # reject events with no hits in detector volume
         if len(c[i]) == 0:
             continue
-        # (temporarily) reject event if vertex outside fiducial volume
-        # if not vertex_in_fiducial_volume(v[i]):
-        #     continue
-        
         events.append({})
-        
         events[-1]['coordinates'] = c[i]
         events[-1]['energies'] = e[i]
 
@@ -53,7 +48,6 @@ def simulate_interaction(event_file, n_events, start_index):
             events[-1]['vertex'] = None
         else:
             events[-1]['vertex'] = v[i]
-
         events[-1]['pdg_codes'] = pdg[i]
         events[-1]['kinetic_energies'] = ke[i]
     return events
