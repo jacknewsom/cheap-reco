@@ -41,3 +41,5 @@ def chris_to_HDF5(filename):
             if (100.0 * (i + 1) / n_events) % 10 == 0:
                 print("\t {}% complete".format(100.0 * (i + 1) / n_events))
 
+if __name__ == "__main__":
+    chris_to_HDF5("/global/project/projectdirs/dune/users/marshalc/jack.root")

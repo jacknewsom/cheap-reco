@@ -1,7 +1,7 @@
 import numpy as np
 from hdf5_loader import load_and_convert_HDF5_to_sparse_np, load_HDF5_from_dataset_keys
 
-def simulate_interaction(event_file, beam_intensity):
+def simulate_interaction(event_file, n_events, start_index):
     '''Simulates neutrino interaction events in large
     volume of liquid argon.
 
@@ -25,20 +25,19 @@ def simulate_interaction(event_file, beam_intensity):
         return True in (kinetic_energies[pdg_codes == 13] > 500)
     
     # approximately 124 events per spill per megawatt at 574m
-    poisson_mean = 124 * beam_intensity
-    n_events = np.random.poisson(poisson_mean)
+    #poisson_mean = 124 * beam_intensity
+    #n_events = np.random.poisson(poisson_mean)
     
     # load n_events
-    start_index = np.random.randint(0, 49999-n_events)
     keys = ['coordinates', 'energies', 'vertex', 'pdg_codes', 'kinetic_energies']
     c, e, v, pdg, ke = load_HDF5_from_dataset_keys(event_file, keys, n_events, start_index)
+    # if they are all None, then it means we ran out of events
+    if c is None:
+        return None
     events = []
     for i in range(n_events):
         # reject events with no hits in detector volume
         if len(c[i]) == 0:
-            continue
-        # reject event if no energetic muon
-        if not contains_energetic_muon(pdg[i], ke[i]):
             continue
         # (temporarily) reject event if vertex outside fiducial volume
         # if not vertex_in_fiducial_volume(v[i]):
@@ -50,7 +49,7 @@ def simulate_interaction(event_file, beam_intensity):
         events[-1]['energies'] = e[i]
 
         # reject vertex if outside fiducial volume
-        if not vertex_in_fiducial_volume(v[i]):
+        if not (vertex_in_fiducial_volume(v[i]) and contains_energetic_muon(pdg[i], ke[i])):
             events[-1]['vertex'] = None
         else:
             events[-1]['vertex'] = v[i]
