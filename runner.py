@@ -124,13 +124,13 @@ for i in range(num_instances):
                 correctly_labeled += 1        
 
     write_time = time()
-    with h5py.File("reconstruction_output/run-%d.hdf5" % run_index, "w", rdcc_nbytes=5 * 10**8) as f:
+    with h5py.File("reconstruction_output/run-%d.hdf5" % run_index, "w") as f:
         for cluster in clusters:
             cluster_group = f.create_group("event-%d_cluster-%d" % (i, cluster))
-            cluster_group.create_dataset("hit_data", data=clusters[cluster]["data"], chunks=True)
-            cluster_group.create_dataset("energy", data=clusters[cluster]["features"], chunks=True)
-            cluster_group.create_dataset("PCA_component_strength", data=clusters[cluster]["PCA_explained_variance"], chunks=True)
-            cluster_group.create_dataset("true_vertex", data=clusters[cluster]["label"], chunks=True)
+            cluster_group.create_dataset("n_hits", data=clusters[cluster]["data"].shape[0])
+            cluster_group.create_dataset("energy", data=clusters[cluster]["features"])
+            cluster_group.create_dataset("PCA_component_strength", data=clusters[cluster]["PCA_explained_variance"])
+            cluster_group.create_dataset("true_vertex", data=clusters[cluster]["label"])
             vertices = cluster_group.create_group("vertices")
             for vertex in vertices_:
                 vertex_ = vertices.create_group("vertex-%d" % vertex)
