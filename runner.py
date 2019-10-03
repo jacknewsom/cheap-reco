@@ -14,7 +14,7 @@ from time import time
 
 
 parser = argparse.ArgumentParser(description="Run reconstruction")
-parser.add_argument('-n', '--nspills', dest='nspills', type=int, default=1000, help='number of spills')
+parser.add_argument('--n', '--nspills', dest='nspills', type=int, default=1000, help='number of spills')
 parser.add_argument('--input_file', dest='input_file', default='jack.hdf5', help='full path to input file')
 parser.add_argument('--beam_intensity', dest='beam_intensity', default=1, help='beam intensity in MW')
 args = parser.parse_args()
@@ -61,7 +61,11 @@ for i in range(args.nspills):
     
     # cluster and cut data
     coordinates, labels, features, predictions = cluster_and_cut(np.vstack(coordinates)[:, :3], np.vstack(labels), np.vstack(features), 0)
-    coordinates, labels, features, predictions = np.vstack(coordinates), np.hstack(labels), np.hstack(features), np.hstack(predictions)  
+    coordinates, labels, features, predictions = np.vstack(coordinates), np.hstack(labels), np.hstack(features), np.hstack(predictions)
+
+    # cut hits with less than 0.5MeV
+    min_energy_idx = np.where(features > 0.5)
+    coordinates, labels, features, predictions = coordinates[min_energy_idx], labels[min_energy_idx], features[min_energy_idx], predictions[min_energy_idx]
     print("\tData loaded in %.3f[s]" % (time() -  data_load_start))
 
     # Organize data into clusters
@@ -123,10 +127,10 @@ for i in range(args.nspills):
                 correctly_labeled += 1        
 
     write_time = time()
-    with h5py.File("reconstruction_output/run-%d.hdf5" % run_index, "w", rdcc_nbytes=5 * 10**8) as f:
+    with h5py.File("reconstruction_output/run-%d.hdf5" % run_index, "w") as f:
         for cluster in clusters:
             cluster_group = f.create_group("event-%d_cluster-%d" % (i, cluster))
-            #cluster_group.create_dataset("hit_data", data=clusters[cluster]["data"], chunks=True)
+            cluster_group.create_dataset("n_hits", data=clusters[cluster]["data"].shape[0])
             cluster_group.create_dataset("energy", data=clusters[cluster]["features"], chunks=True)
             cluster_group.create_dataset("PCA_component_strength", data=clusters[cluster]["PCA_explained_variance"], chunks=True)
             cluster_group.create_dataset("true_vertex", data=clusters[cluster]["label"], chunks=True)

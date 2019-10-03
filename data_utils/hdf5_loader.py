@@ -116,7 +116,11 @@ def load_HDF5_from_dataset_keys(filename, keys, batch_size, start_from=0):
         data = {key: [] for key in keys}
         for i in range(start_from, start_from+batch_size):
             # make sure this index exists, i.e. there are enough events
+<<<<<<< HEAD
             if len(f['vertex']) < i: # we've run out of events
+=======
+            if len(f['voxels_x']) < i: # we've run out of events
+>>>>>>> 243892f1d87f268deb33a5bf8f568fb16851a942
                 return [None for key in keys]
             for key in data:
                 if key == 'coordinates':
