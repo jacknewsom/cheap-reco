@@ -42,8 +42,10 @@ for i in range(args.nspills):
     poisson_mean = 124 * args.beam_intensity
     n_events = np.random.poisson(poisson_mean)
 
+    print "Spill has %d events" % n_events
+
     while events is not None and len(events) == 0:
-        events = simulate_interaction(args.input_file, current_event, n_events)
+        events = simulate_interaction(args.input_file, n_events, current_event)
     if events is None:
         print "Ran out of events in this file"
         break
@@ -58,7 +60,7 @@ for i in range(args.nspills):
     features = [f.reshape((-1, 1)) for f in features]
     
     # cluster and cut data
-    coordinates, labels, features, predictions = cluster_and_cut(np.vstack(coordinates)[:, :3], np.vstack(labels), np.vstack(features), cluster_cut_size)
+    coordinates, labels, features, predictions = cluster_and_cut(np.vstack(coordinates)[:, :3], np.vstack(labels), np.vstack(features), 0)
     coordinates, labels, features, predictions = np.vstack(coordinates), np.hstack(labels), np.hstack(features), np.hstack(predictions)  
     print("\tData loaded in %.3f[s]" % (time() -  data_load_start))
 
@@ -131,7 +133,7 @@ for i in range(args.nspills):
             vertices = cluster_group.create_group("vertices")
             for vertex in vertices_:
                 vertex_ = vertices.create_group("vertex-%d" % vertex)
-                vertex_.create_dataset('coordinates', data=vertices_[vertex])
+                #vertex_.create_dataset('coordinates', data=vertices_[vertex])
                 vertex_.create_dataset('DOCA', data=clusters[cluster]['vertices'][vertex]['DOCA'])
                 vertex_.create_dataset('distance_to_closest_point', data=clusters[cluster]['vertices'][vertex]['distance_to_closest_point'])
     print("\tOutput saved to reconstruction_output/run-%d.hdf5 in %.3f[s]" % (run_index, time() - write_time))
