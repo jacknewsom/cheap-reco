@@ -42,6 +42,8 @@ for i in range(args.nspills):
     poisson_mean = 124 * args.beam_intensity
     n_events = np.random.poisson(poisson_mean)
 
+    print "Spill has %d events" % n_events
+
     while events is not None and len(events) == 0:
         events = simulate_interaction(args.input_file, n_events, current_event)
     if events is None:
@@ -137,7 +139,7 @@ for i in range(args.nspills):
             vertices = cluster_group.create_group("vertices")
             for vertex in vertices_:
                 vertex_ = vertices.create_group("vertex-%d" % vertex)
-                vertex_.create_dataset('coordinates', data=vertices_[vertex])
+                #vertex_.create_dataset('coordinates', data=vertices_[vertex])
                 vertex_.create_dataset('DOCA', data=clusters[cluster]['vertices'][vertex]['DOCA'])
                 vertex_.create_dataset('distance_to_closest_point', data=clusters[cluster]['vertices'][vertex]['distance_to_closest_point'])
     print("\tOutput saved to reconstruction_output/run-%d.hdf5 in %.3f[s]" % (run_index, time() - write_time))
