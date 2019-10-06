@@ -116,6 +116,8 @@ for i in range(args.nspills):
     correctly_labeled = 0
     for cluster in clusters:
         clusters[cluster]["all_vertices"] = vertices_
+        if "vertices" not in clusters[cluster]:
+            continue
         vertices_keys = clusters[cluster]["vertices"].keys()
         for vertex in vertices_keys:
             if clusters[cluster]["vertices"][vertex] == {}:
@@ -129,7 +131,7 @@ for i in range(args.nspills):
         for cluster in clusters:
             cluster_group = f.create_group("event-%d_cluster-%d" % (i, cluster))
             cluster_group.create_dataset("n_hits", data=clusters[cluster]["data"].shape[0])
-            cluster_group.create_dataset("energy", data=clusters[cluster]["features"], chunks=True)
+            cluster_group.create_dataset("energy", data=np.sum(clusters[cluster]["features"]))
             cluster_group.create_dataset("PCA_component_strength", data=clusters[cluster]["PCA_explained_variance"], chunks=True)
             cluster_group.create_dataset("true_vertex", data=clusters[cluster]["label"], chunks=True)
             vertices = cluster_group.create_group("vertices")
