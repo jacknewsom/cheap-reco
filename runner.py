@@ -14,9 +14,11 @@ from time import time
 
 
 parser = argparse.ArgumentParser(description="Run reconstruction")
-parser.add_argument('--n', '--nspills', dest='nspills', type=int, default=1000, help='number of spills')
+parser.add_argument('-n', '--nspills', dest='nspills', type=int, default=-1, help='number of spills')
 parser.add_argument('--input_file', dest='input_file', default='jack.hdf5', help='full path to input file')
 parser.add_argument('--beam_intensity', dest='beam_intensity', default=1, help='beam intensity in MW')
+parser.add_argument('--output_file', dest='output_file', default='reco.hdf5', help='full path to output file')
+parser.add_argument('--seed', dest='seed', type=int, default=12345, help='random seed')
 args = parser.parse_args()
 
 e_accuracies = []
@@ -26,12 +28,14 @@ e_purities = []
 correct_dist_strength_pairs = []
 incorrect_dist_strength_pairs = []
 
-if not os.path.isdir('reconstruction_output'):
-    os.mkdir('reconstruction_output')
-    
+np.random.seed(args.seed)
+
 run_index = int(time())
 print("Run index %d" % run_index)
 current_event = 0
+n_spills = args.nspills
+if n_spills < 0:
+    n_spills = 9999999999999999 # go until we run out of events in the input file
 for i in range(args.nspills):
     print("Analyzing event %d..." % i)
     # load data
@@ -41,8 +45,6 @@ for i in range(args.nspills):
     # approximately 124 events per spill per megawatt at 574m
     poisson_mean = 124 * args.beam_intensity
     n_events = np.random.poisson(poisson_mean)
-
-    print "Spill has %d events" % n_events
 
     while events is not None and len(events) == 0:
         events = simulate_interaction(args.input_file, n_events, current_event)
@@ -127,7 +129,7 @@ for i in range(args.nspills):
                 correctly_labeled += 1        
 
     write_time = time()
-    with h5py.File("reconstruction_output/run-%d.hdf5" % run_index, "w") as f:
+    with h5py.File(args.output_file, "w") as f:
         for cluster in clusters:
             cluster_group = f.create_group("event-%d_cluster-%d" % (i, cluster))
             cluster_group.create_dataset("n_hits", data=clusters[cluster]["data"].shape[0])
@@ -140,5 +142,5 @@ for i in range(args.nspills):
                 #vertex_.create_dataset('coordinates', data=vertices_[vertex])
                 vertex_.create_dataset('DOCA', data=clusters[cluster]['vertices'][vertex]['DOCA'])
                 vertex_.create_dataset('distance_to_closest_point', data=clusters[cluster]['vertices'][vertex]['distance_to_closest_point'])
-    print("\tOutput saved to reconstruction_output/run-%d.hdf5 in %.3f[s]" % (run_index, time() - write_time))
+    print("\tOutput saved to %s in %.3f[s]" % (args.output_file, time() - write_time))
     print("\tTotal time elapsed %.3f[s]" % (time() - data_load_start))
