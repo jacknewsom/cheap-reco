@@ -127,3 +127,23 @@ def load_HDF5_from_dataset_keys(filename, keys, batch_size, start_from=0):
                 else:
                     data[key].append(f[key][i])
         return [data[key] for key in keys]
+    
+def load_output_HDF5_to_dict(filename):
+    with h5py.File(filename, 'r') as f:
+        clusters = {}
+        for cluster_key in f.keys():
+            cluster_idx = len(clusters)
+            clusters[cluster_idx] = {}
+            clusters[cluster_idx]['PCA_component_strength'] = f[cluster_key]['PCA_component_strength'].__array__()
+            clusters[cluster_idx]['energy'] = f[cluster_key]['energy'][()]
+            clusters[cluster_idx]['n_hits'] = f[cluster_key]['n_hits'][()]
+            clusters[cluster_idx]['true_vertex'] = f[cluster_key]['true_vertex'][()]
+            clusters[cluster_idx]['vertices'] = {}
+            for vertex_key in f[cluster_key]['vertices'].keys():
+                clusters[cluster_idx]['vertices'][vertex_key] = {}
+                clusters[cluster_idx]['vertices'][vertex_key]['DOCA'] = f[cluster_key]['vertices'][vertex_key]['DOCA'][()]
+                clusters[cluster_idx]['vertices'][vertex_key]['distance_to_closest_point'] = f[cluster_key]['vertices'][vertex_key]['distance_to_closest_point'][()]
+    return clusters
+
+        
+        
