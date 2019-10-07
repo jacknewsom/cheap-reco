@@ -126,6 +126,19 @@ for i in range(args.nspills):
             if label == clusters[cluster]['prediction']:
                 correctly_labeled += 1        
 
+    # change true_vertex to the vertex in clusters[cluster]['true_vertex'] with greatest energy
+    for cluster in clusters:
+        vertex_energy = {}
+        for vertex in np.unique(clusters[cluster]['label']):
+            vertex_idx = np.where(clusters[cluster]['label'] == vertex)[0]
+            if len(vertex_idx) == 1:
+                vertex_idx = vertex_idx[0]
+            vertex_energy[vertex] = np.sum(clusters[cluster]['label'][vertex_idx])
+        dominant_vertex = max(vertex_energy, key=vertex_energy.get)
+        dominant_vertex_energy = vertex_energy[dominant_vertex] / np.sum(vertex_energy.values())
+        clusters[cluster]['true_vertex'] = dominant_vertex
+        clusters[cluster]['true_vertex_energy_fraction'] = dominant_vertex_energy
+                
     write_time = time()
     with h5py.File("reconstruction_output/run-%d.hdf5" % run_index, "w") as f:
         for cluster in clusters:
@@ -135,11 +148,11 @@ for i in range(args.nspills):
             cluster_group.create_dataset("n_hits", data=clusters[cluster]["data"].shape[0])
             cluster_group.create_dataset("energy", data=np.sum(clusters[cluster]["features"]))
             cluster_group.create_dataset("PCA_component_strength", data=clusters[cluster]["PCA_explained_variance"], chunks=True)
-            cluster_group.create_dataset("true_vertex", data=clusters[cluster]["label"], chunks=True)
+            cluster_group.create_dataset("true_vertex", data=clusters[cluster]["true_vertex"])
+            cluster_group.create_dataset("true_vertex_energy_fraction", data=clusters[cluster]["true_vertex_energy_fraction"])
             vertices = cluster_group.create_group("vertices")
             for vertex in vertices_:
                 vertex_ = vertices.create_group("vertex-%d" % vertex)
-                #vertex_.create_dataset('coordinates', data=vertices_[vertex])
                 vertex_.create_dataset('DOCA', data=clusters[cluster]['vertices'][vertex]['DOCA'])
                 vertex_.create_dataset('distance_to_closest_point', data=clusters[cluster]['vertices'][vertex]['distance_to_closest_point'])
     print("\tOutput saved to reconstruction_output/run-%d.hdf5 in %.3f[s]" % (run_index, time() - write_time))

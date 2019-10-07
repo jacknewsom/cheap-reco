@@ -24,26 +24,26 @@ def extract_interesting_bits(clusters):
         true[key], false[key] = [], []
     for key in clusters:
         prediction = cluster_prediction(clusters[key])
-        for true_vertex_idx in clusters[key]['true_vertex']:
-            for vertex in clusters[key]['vertices']:
-                dist = clusters[key]['vertices'][vertex]['distance_to_closest_point']
-                DOCA = clusters[key]['vertices'][vertex]['DOCA']
-                PCA_component_strength = clusters[key]['PCA_component_strength']
-                if len(PCA_component_strength) == 1 or PCA_component_strength[1] == 0:
-                    PCA_first_component_strength = 0
-                else:
-                    PCA_first_component_strength = PCA_component_strength[0] / PCA_component_strength[1]
-                Nhits = clusters[key]['n_hits']
-                if prediction == true_vertex_idx:
-                    true['dist'].append(dist)
-                    true['DOCA'].append(DOCA)
-                    true['PCA'].append(PCA_first_component_strength)
-                    true['Nhits'].append(Nhits)
-                else:
-                    false['dist'].append(dist)
-                    false['DOCA'].append(DOCA)
-                    false['PCA'].append(PCA_first_component_strength)
-                    false['Nhits'].append(Nhits)
+        true_vertex_idx = clusters[key]['true_vertex']
+        for vertex in clusters[key]['vertices']:
+            dist = clusters[key]['vertices'][vertex]['distance_to_closest_point']
+            DOCA = clusters[key]['vertices'][vertex]['DOCA']
+            PCA_component_strength = clusters[key]['PCA_component_strength']
+            if len(PCA_component_strength) == 1 or PCA_component_strength[1] == 0:
+                PCA_first_component_strength = 0
+            else:
+                PCA_first_component_strength = PCA_component_strength[0] / PCA_component_strength[1]
+            Nhits = clusters[key]['n_hits']
+            if prediction == true_vertex_idx:
+                true['dist'].append(dist)
+                true['DOCA'].append(DOCA)
+                true['PCA'].append(PCA_first_component_strength)
+                true['Nhits'].append(Nhits)
+            else:
+                false['dist'].append(dist)
+                false['DOCA'].append(DOCA)
+                false['PCA'].append(PCA_first_component_strength)
+                false['Nhits'].append(Nhits)
     return true, false
                                         
 def plot_X_vs_Y(X, Y, filename=None, bins=None):
