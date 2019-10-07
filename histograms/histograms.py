@@ -11,7 +11,7 @@ def load_reconstruction_data(data_directory):
     for file_ in hdf5_files:
         yield load_output_HDF5_to_dict(data_directory + file_)
 
-def extract_interesting_bits(clusters):
+def extract_interesting_bits(clusters, min_size, max_size):
     def cluster_prediction(cluster):
         min_key, min_DOCA = -1, float('inf')
         for vertex in cluster['vertices']:
@@ -25,6 +25,8 @@ def extract_interesting_bits(clusters):
     for key in clusters:
         prediction = cluster_prediction(clusters[key])
         true_vertex_idx = clusters[key]['true_vertex']
+        if clusters[key]['n_hits'] < min_size or clusters[key]['n_hits'] > max_size:
+            continue
         for vertex in clusters[key]['vertices']:
             dist = clusters[key]['vertices'][vertex]['distance_to_closest_point']
             DOCA = clusters[key]['vertices'][vertex]['DOCA']
@@ -54,6 +56,12 @@ def plot_X_vs_Y(X, Y, filename=None, bins=None):
     plt.savefig(filename)
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description="Draw histograms")
+    parser.add_argument('--l', dest='l', type=int, default=0, help='Lower bound of cluster size range')
+    parser.add_argument('--u', dest='u', type=int, default=int(1e6), help='Upper bound of cluster size range')
+    args = parser.parse_args()
+    
     print("Scraping together the interesting stuff...")
     keys = ['dist', 'DOCA', 'PCA', 'Nhits']
     pairs = {0:
@@ -69,21 +77,25 @@ if __name__ == '__main__':
     true, false = {key: [] for key in keys}, {key: [] for key in keys}
     for clusters in load_reconstruction_data("../reconstruction_output"):
         print("Loading another file with %d clusters" % len(clusters))
-        t, f = extract_interesting_bits(clusters)
+        t, f = extract_interesting_bits(clusters, args.l, args.u)
         for key in keys:
             true[key] += t[key]
             false[key] += f[key]
     for data in range(2):
         for pair in pairs:
-            end_bit = 'Inc' if data == 1 else 'c'
-            end_bit += 'orrectly Labeled Voxels'
+            end_bit = 'Inc' if data == 1 else 'C'
+            end_bit += 'orrectly Labeled Clusters'
             filename = 'true' if data == 1 else 'false'
             data_ = data
             data = [true, false][data]
-            filename += '_%s-%s.png' % (pairs[pair]['x'], pairs[pair]['y'])
-            
+            if args.u < 1e6 and args.l > 0:
+                filename += '_%s-%s-%d-%d.png' % (pairs[pair]['x'], pairs[pair]['y'], args.l, args.u)
+            else:
+                filename += '_%s-%s' % (pairs[pair]['x'], pairs[pair]['y'])
             xlabel, ylabel = pairs[pair]['xlabel'], pairs[pair]['ylabel']
-            plt.hist2d(data[pairs[pair]['x']], data[pairs[pair]['y']], bins=100)
+            fig, ax = plt.subplots()
+            h = ax.hist2d(data[pairs[pair]['x']], data[pairs[pair]['y']], bins=100, cmap='inferno')
+            plt.colorbar(h[3], ax=ax)
             plt.xlabel(xlabel)
             plt.ylabel(ylabel)
             plt.title(xlabel + ' vs. ' + ylabel + ' For ' + end_bit)
