@@ -42,8 +42,6 @@ for i in range(args.nspills):
     poisson_mean = 124 * args.beam_intensity
     n_events = np.random.poisson(poisson_mean)
 
-    print "Spill has %d events" % n_events
-
     while events is not None and len(events) == 0:
         events = simulate_interaction(args.input_file, n_events, current_event)
     if events is None:
@@ -131,6 +129,8 @@ for i in range(args.nspills):
     write_time = time()
     with h5py.File("reconstruction_output/run-%d.hdf5" % run_index, "w") as f:
         for cluster in clusters:
+            if 'PCA_explained_variance' not in clusters[cluster].keys():
+                continue
             cluster_group = f.create_group("event-%d_cluster-%d" % (i, cluster))
             cluster_group.create_dataset("n_hits", data=clusters[cluster]["data"].shape[0])
             cluster_group.create_dataset("energy", data=np.sum(clusters[cluster]["features"]))
