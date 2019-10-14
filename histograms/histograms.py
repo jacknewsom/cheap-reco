@@ -34,9 +34,10 @@ def extract_interesting_bits(clusters, min_size, max_size):
             if len(PCA_component_strength) == 1 or PCA_component_strength[1] == 0:
                 PCA_first_component_strength = 0
             else:
-                PCA_first_component_strength = PCA_component_strength[0] / PCA_component_strength[1]
+                PCA_first_component_strength = min(PCA_component_strength[0] / PCA_component_strength[1], 100)
             Nhits = clusters[key]['n_hits']
-            if prediction == true_vertex_idx:
+            vertex_idx = int(vertex.split('-')[-1])
+            if prediction == true_vertex_idx and true_vertex_idx == vertex_idx:
                 true['dist'].append(dist)
                 true['DOCA'].append(DOCA)
                 true['PCA'].append(PCA_first_component_strength)
