@@ -61,6 +61,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Draw histograms")
     parser.add_argument('--l', dest='l', type=int, default=0, help='Lower bound of cluster size range')
     parser.add_argument('--u', dest='u', type=int, default=int(1e6), help='Upper bound of cluster size range')
+    parser.add_argument('--d', dest='d', type=str, default='../reconstruction_output', help='Reconstruction data directory')
     args = parser.parse_args()
     
     print("Scraping together the interesting stuff...")
@@ -76,7 +77,7 @@ if __name__ == '__main__':
               'y': 'dist', 'ylabel': 'Distance to Closest Voxel'}}
     
     true, false = {key: [] for key in keys}, {key: [] for key in keys}
-    for clusters in load_reconstruction_data("../reconstruction_output"):
+    for clusters in load_reconstruction_data(args.d):
         print("Loading another file with %d clusters" % len(clusters))
         t, f = extract_interesting_bits(clusters, args.l, args.u)
         for key in keys:
