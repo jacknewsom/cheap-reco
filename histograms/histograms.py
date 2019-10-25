@@ -1,6 +1,6 @@
 import os
 os.sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+import numpy as np
 import matplotlib.pyplot as plt
 from data_utils.hdf5_loader import load_output_HDF5_to_dict
 
@@ -13,14 +13,14 @@ def load_reconstruction_data(data_directory):
 
 def extract_interesting_bits(clusters, min_size, max_size):
     def cluster_prediction(cluster):
-        min_key, min_DOCA = -1, float('inf')
+        predictions = []
         for vertex in cluster['vertices']:
-            if cluster['vertices'][vertex]['DOCA'] < min_DOCA:
-                min_key, min_DOCA = vertex, cluster['vertices'][vertex]['DOCA']
-        return int(min_key.split('-')[-1])
+            if cluster['vertices'][vertex]['DOCA'] <= 10:
+                predictions.append(vertex.split('-')[-1])
+        return predictions
     true = {}
     false = {}
-    for key in ['dist', 'DOCA', 'PCA', 'Nhits']:
+    for key in ['dist', 'DOCA', 'PCA', 'Nhits', 'energy', 'true_vertex', 'prediction']:
         true[key], false[key] = [], []
     for key in clusters:
         prediction = cluster_prediction(clusters[key])
@@ -33,20 +33,29 @@ def extract_interesting_bits(clusters, min_size, max_size):
             PCA_component_strength = clusters[key]['PCA_component_strength']
             if len(PCA_component_strength) == 1 or PCA_component_strength[1] == 0:
                 PCA_first_component_strength = 0
-            else:
+            elif min_size < 100:
                 PCA_first_component_strength = min(PCA_component_strength[0] / PCA_component_strength[1], 100)
+            else:
+                PCA_first_component_strength = PCA_component_strength[0] / PCA_component_strength[1]
             Nhits = clusters[key]['n_hits']
             vertex_idx = int(vertex.split('-')[-1])
+            energy = clusters[key]['energy']
             if prediction == true_vertex_idx and true_vertex_idx == vertex_idx:
                 true['dist'].append(dist)
                 true['DOCA'].append(DOCA)
                 true['PCA'].append(PCA_first_component_strength)
                 true['Nhits'].append(Nhits)
+                true['energy'].append(energy)
+                true['true_vertex'].append(true_vertex_idx)
+                true['prediction'].append(prediction)
             else:
                 false['dist'].append(dist)
                 false['DOCA'].append(DOCA)
                 false['PCA'].append(PCA_first_component_strength)
                 false['Nhits'].append(Nhits)
+                false['energy'].append(energy)
+                false['true_vertex'].append(true_vertex_idx)
+                false['prediction'].append(prediction)
     return true, false
                                         
 def plot_X_vs_Y(X, Y, filename=None, bins=None):
@@ -74,8 +83,8 @@ if __name__ == '__main__':
               'y': 'DOCA', 'ylabel': 'DOCA'},
              2:
              {'x': 'Nhits', 'xlabel': 'Number of Hits in Cluster',
-              'y': 'dist', 'ylabel': 'Distance to Closest Voxel'}}
-    
+              'y': 'dist', 'ylabel': 'Distance to Closest Voxel'}
+    }
     true, false = {key: [] for key in keys}, {key: [] for key in keys}
     for clusters in load_reconstruction_data(args.d):
         print("Loading another file with %d clusters" % len(clusters))
@@ -87,7 +96,7 @@ if __name__ == '__main__':
         for pair in pairs:
             end_bit = 'Inc' if data == 1 else 'C'
             end_bit += 'orrectly Labeled Clusters'
-            filename = 'true' if data == 1 else 'false'
+            filename = 'false' if data == 1 else 'true'
             data_ = data
             data = [true, false][data]
             if args.u < 1e6 and args.l > 0:
@@ -96,6 +105,10 @@ if __name__ == '__main__':
                 filename += '_%s-%s' % (pairs[pair]['x'], pairs[pair]['y'])
             xlabel, ylabel = pairs[pair]['xlabel'], pairs[pair]['ylabel']
             fig, ax = plt.subplots()
+            import code
+            code.interact(local=locals())
+            if data_ == 0 and args.l >= 100:
+                h = ax.hist2d(data[pairs[pair]['x']], data[pairs[pair]['y']], range=pairs[pair]['range'], bins=100, cmap='inferno')
             h = ax.hist2d(data[pairs[pair]['x']], data[pairs[pair]['y']], bins=100, cmap='inferno')
             plt.colorbar(h[3], ax=ax)
             plt.xlabel(xlabel)
