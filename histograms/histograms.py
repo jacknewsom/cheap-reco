@@ -1,6 +1,8 @@
 import os
 os.sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from data_utils.hdf5_loader import load_output_HDF5_to_dict
 
@@ -70,9 +72,10 @@ def eff_and_pur(clusters):
         predictions = cluster_predictions(clusters[key])
         smallest_prediction = min(predictions, key=predictions.get) if len(predictions) > 0 else -1
         true_vertex_idx = clusters[key]['true_vertex']
+        # don't care about eff/pur metrics for non-fiducial vertices
         if smallest_prediction != -1 and smallest_prediction not in vertices.keys():
             vertices[smallest_prediction] = {'all_low_dist_high_PCA_energy': [], 'true_low_dist_high_PCA_energy': [], 'true_energy': []}
-        elif true_vertex_idx not in vertices.keys():
+        if true_vertex_idx not in vertices.keys():
             vertices[true_vertex_idx] = {'all_low_dist_high_PCA_energy': [], 'true_low_dist_high_PCA_energy': [], 'true_energy': []}
         PCA_component_strength = clusters[key]['PCA_component_strength']
         if len(PCA_component_strength) == 1 or PCA_component_strength[1] == 0:
@@ -82,10 +85,10 @@ def eff_and_pur(clusters):
         DOCA = min(predictions.values()) if len(predictions) > 0 else float('inf')
         energy = clusters[key]['energy']
         if DOCA <= 10 and PCA_first_component_strength >= 100:
+            if true_vertex_idx != -1:
+                vertices[true_vertex_idx]['true_low_dist_high_PCA_energy'].append(energy)
             if smallest_prediction != -1:
                 vertices[smallest_prediction]['all_low_dist_high_PCA_energy'].append(energy)
-            if smallest_prediction == true_vertex_idx:
-                vertices[true_vertex_idx]['true_low_dist_high_PCA_energy'].append(energy)
         vertices[true_vertex_idx]['true_energy'].append(energy)
     eff, pur = [], []
     for vertex in vertices:
@@ -159,8 +162,6 @@ def do_ep_histogram(args):
     plt.ylabel(ylabel)
     plt.title(xlabel + ' vs. ' + ylabel)
     plt.savefig(filename)
-    import code
-    code.interact(local=locals())
     
 if __name__ == '__main__':
     import argparse
