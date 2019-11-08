@@ -73,10 +73,12 @@ def eff_and_pur(clusters):
         smallest_prediction = min(predictions, key=predictions.get) if len(predictions) > 0 else -1
         true_vertex_idx = clusters[key]['true_vertex']
         # don't care about eff/pur metrics for non-fiducial vertices
-        if smallest_prediction != -1 and smallest_prediction not in vertices.keys():
-            vertices[smallest_prediction] = {'all_low_dist_high_PCA_energy': [], 'true_low_dist_high_PCA_energy': [], 'true_energy': []}
+        if true_vertex_idx == -1 and smallest_prediction == -1:
+            continue
+        if smallest_prediction not in vertices.keys():
+            vertices[smallest_prediction] = {'all_low_dist_high_PCA_energy': [], 'correctly_labeled_low_dist_high_PCA_energy': [], 'true_energy': []}
         if true_vertex_idx not in vertices.keys():
-            vertices[true_vertex_idx] = {'all_low_dist_high_PCA_energy': [], 'true_low_dist_high_PCA_energy': [], 'true_energy': []}
+            vertices[true_vertex_idx] = {'all_low_dist_high_PCA_energy': [], 'correctly_labeled_low_dist_high_PCA_energy': [], 'true_energy': []}
         PCA_component_strength = clusters[key]['PCA_component_strength']
         if len(PCA_component_strength) == 1 or PCA_component_strength[1] == 0:
             PCA_first_component_strength = 0
@@ -85,22 +87,25 @@ def eff_and_pur(clusters):
         DOCA = min(predictions.values()) if len(predictions) > 0 else float('inf')
         energy = clusters[key]['energy']
         if DOCA <= 10 and PCA_first_component_strength >= 100:
-            if true_vertex_idx != -1:
-                vertices[true_vertex_idx]['true_low_dist_high_PCA_energy'].append(energy)
-            if smallest_prediction != -1:
-                vertices[smallest_prediction]['all_low_dist_high_PCA_energy'].append(energy)
+            if smallest_prediction == true_vertex_idx:
+                vertices[true_vertex_idx]['correctly_labeled_low_dist_high_PCA_energy'].append(energy)
+            vertices[smallest_prediction]['all_low_dist_high_PCA_energy'].append(energy)
         vertices[true_vertex_idx]['true_energy'].append(energy)
     eff, pur = [], []
     for vertex in vertices:
         all_cut_energy = sum(vertices[vertex]['all_low_dist_high_PCA_energy'])
         all_event_energy = sum(vertices[vertex]['true_energy'])
-        true_cut_energy = sum(vertices[vertex]['true_low_dist_high_PCA_energy'])
+        correct_cut_energy = sum(vertices[vertex]['correctly_labeled_low_dist_high_PCA_energy'])
         if all_event_energy == 0 or all_cut_energy == 0:
             eff.append(0)
             pur.append(0)
             continue
-        eff.append(all_cut_energy / all_event_energy)
-        pur.append(true_cut_energy / all_cut_energy)
+        eff.append(correct_cut_energy / all_event_energy)
+        pur.append(correct_cut_energy / all_cut_energy)
+        if pur[-1] > 1 or eff[-1] > 1:
+            print("found e/p > 1")
+            import code
+            code.interact(local=locals())
     return eff, pur
 
 def do_data_histograms(args):    
@@ -162,6 +167,8 @@ def do_ep_histogram(args):
     plt.ylabel(ylabel)
     plt.title(xlabel + ' vs. ' + ylabel)
     plt.savefig(filename)
+    import code
+    code.interact(local=locals())
     
 if __name__ == '__main__':
     import argparse
