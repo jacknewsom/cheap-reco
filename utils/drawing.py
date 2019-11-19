@@ -22,7 +22,7 @@ def scatter_hits(x, y, z, colors, event_text=None):
                           hovertext=event_text
                           )
 
-def scatter_vertices(vertices, vtext=None):
+def scatter_vertices(vertices, vcolors, vtext=None):
     '''Returns plotly Scatter3d object formatted properly
     for vertex data.
     
@@ -31,8 +31,6 @@ def scatter_vertices(vertices, vtext=None):
     '''
     vertices = np.vstack(vertices)
     vx, vy, vz = vertices[:, 0], vertices[:, 1], vertices[:, 2]
-    vcolors = list(range(vertices.shape[0]))
-    vtext = ['Vertex %d' % d for d in range(vertices.shape[0])]
     return go.Scatter3d(x=vx, y=vy, z=vz, mode='markers', name=None,
                       marker=dict(
                           size=10,

@@ -5,10 +5,12 @@ import h5py
 import argparse
 import scipy.spatial
 import reconstruction.pca
+from plotly.offline import plot
 from data_utils.event_generator import simulate_interaction
 from reconstruction.clustering import cluster_and_cut
 from reconstruction.association import is_cluster_touching_vertex_iterative, is_cluster_touching_vertex_clusterwise
 from reconstruction.pca import pca_vertex_association, pca, dist
+from utils.drawing import scatter_hits, scatter_vertices, draw
 from utils.metrics import energy_accuracy, number_accuracy, energy_metrics
 from time import time
 
@@ -110,7 +112,18 @@ for i in range(args.nspills):
                 if clusters[cluster]["vertices"][j]["DOCA"] < min_dist:
                     min_dist = clusters[cluster]["vertices"][j]["DOCA"]
                     min_vertex = j
-            clusters[cluster]["prediction"] = min_vertex
+            # clusters[cluster]["prediction"] = min_vertex
+            if len(explained_variance) == 1:
+                PCA_strength = 0
+            elif explained_variance[1] == 0:
+                PCA_strength = 0
+            else:
+                PCA_strength = explained_variance[0] / explained_variance[1]
+            if PCA_strength >= 100 and min_dist <= 10:
+                clusters[cluster]['prediction'] = min_vertex
+            else:
+                clusters[cluster]['prediction'] = -1
+             
     print("\tPCA cluster association complete in %.3f[s]" % (time() - pca_start))
 
     # Fix cut vertices problem
@@ -160,4 +173,45 @@ for i in range(args.nspills):
                 vertex_.create_dataset('DOCA', data=clusters[cluster]['vertices'][vertex]['DOCA'])
                 vertex_.create_dataset('distance_to_closest_point', data=clusters[cluster]['vertices'][vertex]['distance_to_closest_point'])
     print("\tOutput saved to %s in %.3f[s]" % (args.output_file, time() - write_time))
+
+    draw_time = time()
+    # remove 1 hit clusters
+    clusters = {c: clusters[c] for c in clusters if clusters[c]['data'].shape != (1, 3)}
+    x, y, z, pred, label = [], [], [], [], []
+    colors = []
+    color = 0
+    for c in clusters:
+        data = clusters[c]['data']
+        prediction = clusters[c]['prediction']
+        label_ = clusters[c]['true_vertex']
+        x.append(data[:, 0])
+        y.append(data[:, 1])
+        z.append(data[:, 2])
+        pred.append([prediction for j in range(len(x[-1]))])
+        label.append([label_ for j in range(len(x[-1]))])
+        if len(x[-1]) < 5:
+            colors.append([-1 for j in range(len(x[-1]))])
+        else:
+            colors.append([color for j in range(len(x[-1]))])
+            color += 1
+    x = np.hstack(x)
+    y = np.hstack(y)
+    z = np.hstack(z)
+    pred = np.hstack(pred)
+    label = np.hstack(label)
+    colors = np.hstack(colors)
+    text = ['cluster:' + str(c) + ', pred:' + str(p) + ', true:' + str(l) for c, p, l in zip(colors, pred, label)]
+    vertex_data = [(-1, np.array([0,0,0]))] + [(v, vertices_[v]) for v in vertices_]
+    vcolors = [v[0] for v in vertex_data]
+    vtext = ['Vertex %d' % v for v in vcolors]
+    vhits = [v[1] for v in vertex_data]
+#    import code
+#    code.interact(local=locals())
+    pred_hits = scatter_hits(x, y, z, pred, text)
+    true_hits = scatter_hits(x, y, z, label, text)
+    v_scatter = scatter_vertices(vhits, vcolors, vtext)
+    filename = '3d_scatterplots/run-%d-spill-%d-' % (run_index, i)
+    plot([pred_hits, v_scatter], filename=filename + 'pred.html')
+    plot([true_hits, v_scatter], filename=filename + 'true.html')
+    print("\tScatterplots drawn in %.3f[s]" % (time() - draw_time))
     print("\tTotal time elapsed %.3f[s]" % (time() - data_load_start))
