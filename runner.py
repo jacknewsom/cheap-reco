@@ -155,7 +155,7 @@ for i in range(args.nspills):
         dominant_vertex_energy = vertex_energy[dominant_vertex] / np.sum(vertex_energy.values())
         clusters[cluster]['true_vertex'] = dominant_vertex
         clusters[cluster]['true_vertex_energy_fraction'] = dominant_vertex_energy
-                
+
     write_time = time()
     with h5py.File(args.output_file, "w") as f:
         for cluster in clusters:
