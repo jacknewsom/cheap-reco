@@ -1,13 +1,5 @@
 import numpy as np
 
-points = np.array([
-    [0,0,0],
-    [1,1,1],
-    [1,-1,1],
-    [5,9,7],
-])
-origin = np.zeros((1,3))
-
 def cartesian_to_spherical(points, origin):
     ''' Converts (x, y, z) data to (r, theta, phi) data
     where theta is azithumal angle and angular data is in
@@ -30,7 +22,7 @@ def histogram_angular_distribution(angular):
     '''
     bins = np.zeros((36, 18))
     for point in angular:
-        theta_bin, phi_bin = int(point[1]/10), int(point[2]/10)
+        theta_bin, phi_bin = min(int(point[1]/10), 35), min(int(point[2]/10), 17)
         bins[theta_bin, phi_bin] += 1
     return bins
 
@@ -43,13 +35,16 @@ def calculate_subclusters(points, origin):
     angular = cartesian_to_spherical(points, origin)
     bins = histogram_angular_distribution(angular)
     background = np.average(bins)
-    clusters = {}
+    clusters_idx = {}
+    noise_idx = []
+    idx = 0
     for cartesian, spherical in zip(points, angular):
-        theta, phi = int(spherical[1]/10), int(spherical[2]/10)
+        theta, phi = min(int(spherical[1]/10), 35), min(int(spherical[2]/10), 17)
         if bins[theta, phi] > 10:
-            if (theta, phi) not in clusters.keys():
-                clusters[(theta, phi)] = []
-            clusters[(theta, phi)].append(cartesian)
-    for cluster in clusters:
-        clusters[cluster] = np.vstack(clusters[cluster])
-    return clusters.values()
+            if (theta, phi) not in clusters_idx.keys():
+                clusters_idx[(theta, phi)] = []
+            clusters_idx[(theta, phi)].append(idx)
+        else:
+            noise_idx.append(idx)
+        idx += 1
+    return clusters_idx.values(), noise_idx

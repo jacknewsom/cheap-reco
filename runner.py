@@ -6,6 +6,7 @@ import argparse
 import scipy.spatial
 import reconstruction.pca
 from plotly.offline import plot
+from hough.hough import calculate_subclusters
 from data_utils.event_generator import simulate_interaction
 from reconstruction.clustering import cluster_and_cut
 from reconstruction.association import is_cluster_touching_vertex_iterative, is_cluster_touching_vertex_clusterwise
@@ -67,6 +68,9 @@ for i in range(args.nspills):
     coordinates, labels, features, predictions = cluster_and_cut(np.vstack(coordinates)[:, :3], np.vstack(labels), np.vstack(features), 0)
     coordinates, labels, features, predictions = np.vstack(coordinates), np.hstack(labels), np.hstack(features), np.hstack(predictions)
 
+    # Fix cut vertices problem
+    vertices_ = {j: vertices[j] for j in range(len(vertices)) if vertices[j] is not None}
+    
     # cut hits with less than 0.5MeV
     min_energy_idx = np.where(features > 0.5)
     coordinates, labels, features, predictions = coordinates[min_energy_idx], labels[min_energy_idx], features[min_energy_idx], predictions[min_energy_idx]
@@ -86,9 +90,53 @@ for i in range(args.nspills):
     if -1 in clusters.keys():
         n_clusters = max(clusters.keys())
         for point in range(len(clusters[-1]["data"])):
-            clusters[n_clusters+point+1] = {"data": clusters[-1]["data"][point].reshape((1,-1)), "label": [clusters[-1]["label"][point]], "features": [clusters[-1]["features"][point]]}
+            clusters[n_clusters+point+1] = {"data": clusters[-1]["data"][point].reshape((1,-1)), "label": np.array([clusters[-1]["label"][point]]), "features": np.array([clusters[-1]["features"][point]])}
         del clusters[-1]
-            
+
+    # set true_vertex to the vertex with greatest energy
+    for cluster in clusters:
+        vertex_energy = {}
+        for vertex in np.unique(clusters[cluster]['label']):
+            vertex_idx = np.where(clusters[cluster]['label'] == vertex)[0]
+            if len(vertex_idx) == 1:
+                vertex_idx = vertex_idx[0]
+            vertex_energy[vertex] = np.sum(clusters[cluster]['label'][vertex_idx])
+        dominant_vertex = max(vertex_energy, key=vertex_energy.get)
+        dominant_vertex_energy = vertex_energy[dominant_vertex] / np.sum(vertex_energy.values())
+        clusters[cluster]['true_vertex'] = dominant_vertex
+        clusters[cluster]['true_vertex_energy_fraction'] = dominant_vertex_energy
+        
+    # run 'baby Hough' on clusters to fix pileup at vertices
+    clusters_ = {}
+    for cluster in clusters:
+        if clusters[cluster]['true_vertex'] != -1:
+            points = clusters[cluster]['data']
+            origin = vertices_[clusters[cluster]['true_vertex']]
+            subclusters, noise = calculate_subclusters(points, origin)
+            label = clusters[cluster]['label']
+            features = clusters[cluster]['features']
+            for subcluster in subclusters:
+                points_, label_, features_ = points[subcluster], label[subcluster], features[subcluster]
+                clusters_[len(clusters_)] = {
+                    'data': points_,
+                    'label': label_,
+                    'features': features_,
+                    'true_vertex': clusters[cluster]['true_vertex'],
+                    'true_vertex_energy_fraction': clusters[cluster]['true_vertex_energy_fraction'],
+                }
+            if noise:
+                clusters_[len(clusters_)] = {
+                    'data': points[noise],
+                    'label': label[noise],
+                    'features': features[noise],
+                    'true_vertex': clusters[cluster]['true_vertex'],
+                    'true_vertex_energy_fraction': clusters[cluster]['true_vertex_energy_fraction'],
+                }
+        else:
+            # can't do baby Hough without true vertex information
+            clusters_[len(clusters_)] = clusters[cluster]
+    clusters = clusters_
+        
     # run PCA on clusters
     pca_start = time()
     non_None_vertices = [v for v in vertices if v is not None]
@@ -112,7 +160,6 @@ for i in range(args.nspills):
                 if clusters[cluster]["vertices"][j]["DOCA"] < min_dist:
                     min_dist = clusters[cluster]["vertices"][j]["DOCA"]
                     min_vertex = j
-            # clusters[cluster]["prediction"] = min_vertex
             if len(explained_variance) == 1:
                 PCA_strength = 0
             elif explained_variance[1] == 0:
@@ -123,11 +170,7 @@ for i in range(args.nspills):
                 clusters[cluster]['prediction'] = min_vertex
             else:
                 clusters[cluster]['prediction'] = -1
-             
     print("\tPCA cluster association complete in %.3f[s]" % (time() - pca_start))
-
-    # Fix cut vertices problem
-    vertices_ = {j: vertices[j] for j in range(len(vertices)) if vertices[j] is not None}
     
     # Calculate accuracy
     correctly_labeled = 0
@@ -142,20 +185,7 @@ for i in range(args.nspills):
         for label in clusters[cluster]['label']:
             if label == clusters[cluster]['prediction']:
                 correctly_labeled += 1        
-
-    # change true_vertex to the vertex in clusters[cluster]['true_vertex'] with greatest energy
-    for cluster in clusters:
-        vertex_energy = {}
-        for vertex in np.unique(clusters[cluster]['label']):
-            vertex_idx = np.where(clusters[cluster]['label'] == vertex)[0]
-            if len(vertex_idx) == 1:
-                vertex_idx = vertex_idx[0]
-            vertex_energy[vertex] = np.sum(clusters[cluster]['label'][vertex_idx])
-        dominant_vertex = max(vertex_energy, key=vertex_energy.get)
-        dominant_vertex_energy = vertex_energy[dominant_vertex] / np.sum(vertex_energy.values())
-        clusters[cluster]['true_vertex'] = dominant_vertex
-        clusters[cluster]['true_vertex_energy_fraction'] = dominant_vertex_energy
-
+    
     write_time = time()
     with h5py.File(args.output_file, "w") as f:
         for cluster in clusters:
@@ -205,8 +235,6 @@ for i in range(args.nspills):
     vcolors = [v[0] for v in vertex_data]
     vtext = ['Vertex %d' % v for v in vcolors]
     vhits = [v[1] for v in vertex_data]
-#    import code
-#    code.interact(local=locals())
     pred_hits = scatter_hits(x, y, z, pred, text)
     true_hits = scatter_hits(x, y, z, label, text)
     v_scatter = scatter_vertices(vhits, vcolors, vtext)
