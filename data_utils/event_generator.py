@@ -24,10 +24,6 @@ def simulate_interaction(event_file, n_events, start_index):
     def contains_energetic_muon(pdg_codes, kinetic_energies):
         return True in (kinetic_energies[pdg_codes == 13] > 500)
     
-    # approximately 124 events per spill per megawatt at 574m
-    #poisson_mean = 124 * beam_intensity
-    #n_events = np.random.poisson(poisson_mean)
-    
     # load n_events
     keys = ['coordinates', 'energies', 'vertex', 'pdg_codes', 'kinetic_energies']
     c, e, v, pdg, ke = load_HDF5_from_dataset_keys(event_file, keys, n_events, start_index)
