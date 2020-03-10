@@ -235,15 +235,8 @@ for event_index in range(n_spills):
                 PCA_strength = 0
             else:
                 PCA_strength = explained_variance[0] / explained_variance[1]
+            # Add cuts here to reject clusters with some set of parameters
             post_Hough[cluster]['prediction'] = min_vertex
-            '''
-            # uncomment this block to enable cuts
-            if PCA_strength >= 2 and min_dist <= 20 and n_hits > 5:
-                post_Hough[cluster]['prediction'] = min_vertex
-            else:
-                # cluster failed PCA search even after Hough
-                post_Hough[cluster]['prediction'] = -1
-            '''
         clusters_ = {}
         for cluster in clusters:
             clusters_[len(clusters_)] = clusters[cluster]
