@@ -5,8 +5,8 @@ import argparse
 from time import time
 from plotly.offline import plot
 from utils.drawing import scatter_hits, scatter_vertices, draw
-from reconstruction.clustering import cluster_and_cut
-from reconstruction.pca import pca, dist
+from clustering_utils.clustering import cluster_and_cut
+from clustering_utils.pca import pca, dist
 from hough.hough import calculate_subclusters_with_grouping
 from data_utils.event_generator import simulate_interaction
 
@@ -90,7 +90,6 @@ for event_index in range(n_spills):
     coordinates = coordinates[min_energy_idx]
     labels = labels[min_energy_idx]
     features = features[min_energy_idx]
-    
 
     # cluster data
     coordinates, labels, features, predictions = cluster_and_cut(
@@ -136,8 +135,6 @@ for event_index in range(n_spills):
         vertex_energy = {}
         for vertex in np.unique(clusters[cluster]['label']):
             vertex_idx = np.where(clusters[cluster]['label'] == vertex)[0]
-            if len(vertex_idx) == 1:
-                vertex_idx = vertex_idx[0]
             vertex_energy[vertex] = np.sum(clusters[cluster]['label'][vertex_idx])
         dominant_vertex = max(vertex_energy, key=vertex_energy.get)
         dominant_vertex_energy = vertex_energy[dominant_vertex] / np.sum(vertex_energy.values())
@@ -238,11 +235,15 @@ for event_index in range(n_spills):
                 PCA_strength = 0
             else:
                 PCA_strength = explained_variance[0] / explained_variance[1]
+            post_Hough[cluster]['prediction'] = min_vertex
+            '''
+            # uncomment this block to enable cuts
             if PCA_strength >= 2 and min_dist <= 20 and n_hits > 5:
                 post_Hough[cluster]['prediction'] = min_vertex
             else:
                 # cluster failed PCA search even after Hough
                 post_Hough[cluster]['prediction'] = -1
+            '''
         clusters_ = {}
         for cluster in clusters:
             clusters_[len(clusters_)] = clusters[cluster]
