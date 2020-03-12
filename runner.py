@@ -135,12 +135,12 @@ for event_index in range(n_spills):
         vertex_energy = {}
         for vertex in np.unique(clusters[cluster]['label']):
             vertex_idx = np.where(clusters[cluster]['label'] == vertex)[0]
-            vertex_energy[vertex] = np.sum(clusters[cluster]['label'][vertex_idx])
+            vertex_energy[vertex] = np.sum(clusters[cluster]['features'][vertex_idx])
         dominant_vertex = max(vertex_energy, key=vertex_energy.get)
         dominant_vertex_energy = vertex_energy[dominant_vertex] / np.sum(vertex_energy.values())
         clusters[cluster]['true_vertex'] = dominant_vertex
         clusters[cluster]['true_vertex_energy_fraction'] = dominant_vertex_energy
-
+    
     # run PCA on clusters
     pca_start = time()
     non_None_vertices = [v for v in vertices if v is not None]
